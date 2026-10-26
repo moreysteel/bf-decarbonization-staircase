@@ -62,6 +62,12 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
 .ds .muted { color: var(--color-fg-muted); }
 .ds .pill { display: inline-block; padding: 0 6px; border-radius: 999px; border: 1px solid var(--color-border-line); color: var(--color-fg-muted); white-space: nowrap; }
 .ds .pill.old { border-color: var(--color-warn); color: var(--color-warn); }
+.ds-readme { display: grid; gap: var(--cds-gap-sm); max-width: 86ch; font-size: var(--cds-font-size-body); line-height: 1.5; }
+.ds-readme p, .ds-readme ul { margin: 0; } .ds-readme ul { padding-left: 1.2em; } .ds-readme li { margin: .15em 0; }
+.ds-readme h3 { margin: .6em 0 0; font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); }
+.ds-readme .ds-tkey { max-width: none; font-size: var(--cds-font-size-body); line-height: 1.45; grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr); }
+.ds-readme .ds-tkey dt { color: var(--color-fg); } .ds-readme .ds-tkey dd { color: var(--color-fg); }
+.ds-readme .ds-tabjump { font: inherit; color: var(--color-fg); background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; }
 .ds-method { display: grid; gap: var(--cds-gap-sm); max-width: 80ch; font-size: var(--cds-font-size-body); line-height: 1.5; }
 .ds-method p { margin: 0; }
 .ds-key { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
@@ -199,7 +205,8 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
 
   <div class="ds-book">
     <div class="ds-tabs" role="tablist" aria-label="Views" id="tabs">
-      <button class="ds-tab" type="button" role="tab" id="tab-staircase" aria-controls="staircase" aria-selected="true">Staircase</button>
+      <button class="ds-tab" type="button" role="tab" id="tab-readme" aria-controls="readme" aria-selected="true">Read me</button>
+      <button class="ds-tab" type="button" role="tab" id="tab-staircase" aria-controls="staircase" aria-selected="false">Staircase</button>
       <button class="ds-tab" type="button" role="tab" id="tab-prices" aria-controls="prices" aria-selected="false">Prices</button>
       <button class="ds-tab" type="button" role="tab" id="tab-capital" aria-controls="capital" aria-selected="false">Capital</button>
       <button class="ds-tab" type="button" role="tab" id="tab-costs" aria-controls="costs" aria-selected="false">Cost build-up</button>
@@ -217,7 +224,49 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
       <span class="ds-tabs-fill" aria-hidden="true"></span>
     </div>
 
-    <section class="ds-panel" role="tabpanel" id="staircase" aria-labelledby="tab-staircase">
+    <section class="ds-panel" role="tabpanel" id="readme" aria-labelledby="tab-readme">
+      <section class="ds-card" id="readme-card">
+        <h2>Read me first</h2>
+        <div class="ds-readme">
+          <p><strong>What this is.</strong> The results of a physics-based blast furnace model that walks one furnace from all-coke operation to the lowest-carbon configuration the model can hold: twelve cases that differ only in what is injected, where, and through how many lances, each solved at its own limits, and each priced on the same basis. The question it answers is the one a plant asks: <em>what is the cheapest way down, and what does each step cost per tonne of CO₂ it removes?</em></p>
+          <p><strong>The furnace.</strong> One sample furnace, 6,500 t/d of hot metal on a pellet burden, 28 tuyeres, 3,000 m³ working volume, drawn and solved from the model's own dimensions. It is not any particular plant. Every case runs on it so that the cases compare like with like.</p>
+          <p><strong>The model.</strong> Conservation and thermodynamics first: a simultaneous mass-and-energy solve of the furnace in two segments (the matrix method of Cameron et al.), with the direct-reduction split placed by the extended operating line of Bailera et al., so that the method reaches reformed gas, top-gas recycle and shaft injection, where no rule of thumb exists. Empirical rules are used to check the conventional cases, never to constrain the solve. The model is calibrated on the literature; no plant data is in it yet, and that is the point of the last tab.</p>
+          <p><strong>How to read the staircase.</strong> Each point is one case: its cost per tonne of hot metal against its CO₂ per tonne. The line is the staircase: from all-coke to the lowest-carbon case, each step is the cheapest case that is both cheaper and lower in CO₂ than the step before. A step that cannot go down is left off the line, and the Steps tab shows what it would have cost. Captured CO₂ from the recycle cases counts as removed only when storing or selling it pays at the prices set.</p>
+          <p><strong>What you can change.</strong> Every price (coke, PCI coal, natural gas, oxygen, power, a carbon price, a storage credit, transport) on the Prices tab, with a US deck and an illustrative European one as presets, and the capital items counted on the Capital tab. Every tab reprices as you move them. The physics is not re-solved when prices move: a large price change could move a case's cheapest oxygen level or injection rate, so read a far-off price as a guide.</p>
+          <h3>The tabs</h3>
+          <dl class="ds-tkey">
+            <dt>Staircase</dt><dd>Cost against CO₂ for every case, the whole walk and a close-up of the first three steps. Point at or tap a case to pick it out everywhere.</dd>
+            <dt>Prices</dt><dd>The price sliders and presets, and each case's cost against all-coke at those prices.</dd>
+            <dt>Capital</dt><dd>The plant each case needs, as a checklist; untick what you already own.</dd>
+            <dt>Cost build-up</dt><dd>Each case's cost split into capital, power, coke, coal, gas, oxygen and the export gas credit.</dd>
+            <dt>Steps</dt><dd>The staircase as a table: which case each step keeps, what it saves, and what it costs per tonne of CO₂.</dd>
+            <dt>Cases</dt><dd>The solved operating point of every case and the limit that stopped it.</dd>
+            <dt>Raw materials</dt><dd>What the furnace is fed: the analyses, quality levers and prices of the coke, pellet, fluxes, coals and gases.</dd>
+            <dt>Charging</dt><dd>The bell-less-top charging program that lays down the case's radial ore/coke profile.</dd>
+            <dt>Furnace</dt><dd>The furnace to scale with the case's thermal field, cohesive zone and burden layers inside it.</dd>
+            <dt>Raceway</dt><dd>The tuyere, its lances and the raceway for the case, in section.</dd>
+            <dt>Products</dt><dd>What each case makes: hot metal, slag and top gas, with the slag's liquidus, superheat and viscosity.</dd>
+            <dt>Furnace forces</dt><dd>A free-body sketch of the burden column, the active coke zone and the deadman for the case.</dd>
+            <dt>Gas balance</dt><dd>Where the top gas goes: stoves, recycle, export, and the plant's electricity ledger.</dd>
+            <dt>Your furnace</dt><dd>Your own furnace and one base operating period: checked by conservation arithmetic, priced on the staircase, drawn to scale beside the sample furnace, and exported for a model run.</dd>
+            <dt>Method</dt><dd>How the cost is built, line by line, and the check of this page's arithmetic against the model's own records.</dd>
+          </dl>
+          <h3>The cases, by letter</h3>
+          <p><strong>A</strong> all-coke, the reference · <strong>B, C</strong> pulverized coal at 100 and 200 kg/tHM · <strong>D</strong> the most coal the furnace will take, through two lances · <strong>E, F</strong> natural gas at 50 and 100 kg/tHM · <strong>G</strong> gas at 100 kg through two lances · <strong>H</strong> the most gas the furnace will take · <strong>J</strong> reformed gas from an autothermal reformer · <strong>K</strong> natural gas on one lance and reformed gas on the other · <strong>L</strong> coal with top-gas recycle to the tuyeres and the shaft (the ULCOS-class oxygen furnace) · <strong>M</strong> the most gas the furnace will take with recycle to the shaft to keep the stack warm. <strong>L stored</strong> and <strong>M stored</strong> are L and M with their captured CO₂ stored. Oxygen enrichment and the burden profile are chosen per case to make it feasible at the least cost; where a case says "most", the model walked the rate up until a limit it computes stopped it, and the Cases tab names that limit.</p>
+          <h3>What the numbers are, and are not</h3>
+          <ul>
+            <li>Costs are per tonne of hot metal on a works basis: annualized capital, fuels, purchased oxygen and power, less the export gas sold as power. Carbon policy sits on top of that, not inside it. Units are metric; prices are US dollars.</li>
+            <li>CO₂ is the furnace's own, per tonne of hot metal: what leaves the furnace gate as top gas burnt or vented, net of what the recycle cases capture when storing it pays. Upstream emissions (coke making, pellets, gas supply, the oxygen plant's power) are not in it.</li>
+            <li>The sample furnace, the material analyses and the prices are literature-class placeholders with stated bands; a plant replaces them with its own. The ranking of the cases has proved robust to the prices; the spreads between them have not.</li>
+            <li>The model is under active development. Some cases carry a "previous epoch" mark where they were last solved on an earlier version of the model and are being re-solved; the Cases tab shows it.</li>
+          </ul>
+          <h3>What we would like from you</h3>
+          <p>If you run a blast furnace, the <button type="button" class="ds-tabjump" data-tab="yourfurnace">Your furnace</button> tab takes your furnace's construction and one base operating period, checks that the numbers close, and prices that period on the staircase, with nothing sent anywhere. The file it writes is what the model runs to put your furnace on the staircase at its own limits. Where the model has had to assume something that a plant measures (heat losses and their split, the thermal reserve zone, the flame temperature definition, the practical oxygen ceiling, what sets your minimum coke rate), those are the questions we would most like answered, because several of them are alternative explanations for the same observations.</p>
+          <p>Joe Morey · Morey Industrial Consulting, LLC · moreysteel.com. Results from a model under active development, shared for discussion.</p>
+        </div>
+      </section>
+    </section>
+    <section class="ds-panel" role="tabpanel" id="staircase" aria-labelledby="tab-staircase" hidden>
       <section class="ds-card" id="case-key-card">
         <div class="ds-row">
           <h2>Find a case</h2>
@@ -1938,8 +1987,8 @@ window.dsPrice = function (c, p, k, inc) {
   const dt = (v) => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(3);
   const el = (id) => document.getElementById(id);
   let built = false;
-  const TABS = ['staircase', 'prices', 'capital', 'costs', 'steps', 'cases', 'materials', 'charging', 'furnace', 'raceway', 'products', 'forces', 'gasbalance', 'yourfurnace', 'method'];
-  let active = 'staircase', pendingScroll = null;
+  const TABS = ['readme', 'staircase', 'prices', 'capital', 'costs', 'steps', 'cases', 'materials', 'charging', 'furnace', 'raceway', 'products', 'forces', 'gasbalance', 'yourfurnace', 'method'];
+  let active = 'readme', pendingScroll = null;
   const CUR_EPOCH = 'PT-1';   // the current model epoch (ST-1): a case on any other is drawn hollow and flagged for a re-walk
   let word = 'stored';   // 'sold' when transport and storage is below zero
 
@@ -2966,6 +3015,7 @@ window.dsPrice = function (c, p, k, inc) {
     if (j === undefined) return;
     ev.preventDefault(); showTab(TABS[j], true);
   });
+  document.querySelectorAll('.ds-tabjump').forEach((b) => b.addEventListener('click', () => { showTab(b.dataset.tab); el('tabs').scrollIntoView({ block: 'start' }); }));
   el('goto-prices').addEventListener('click', () => { showTab('prices'); el('tabs').scrollIntoView({ block: 'start' }); });
   {
     let h = location.hash.slice(1);
