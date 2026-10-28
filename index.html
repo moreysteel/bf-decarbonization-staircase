@@ -79,6 +79,11 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
 .ds-keyitem i { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid; box-sizing: border-box; transform: translateY(1px); }
 .ds-keyitem b { flex: none; min-width: 1.1em; font-weight: 700; }
 .ds-keyitem .old { color: var(--color-warn); }
+.ds-keysub { display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; padding: 2px 6px; font: inherit; font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); letter-spacing: .04em; text-transform: uppercase; background: transparent; border: 1px solid transparent; border-radius: var(--cds-radius); cursor: pointer; text-align: left; }
+.ds-keysub:hover { border-color: var(--color-border-line); background: var(--color-bg); }
+.ds-keysub::before { content: '▸'; display: inline-block; width: 1em; transition: transform .15s; }
+.ds-keysub[aria-expanded="true"]::before { transform: rotate(90deg); }
+.ds-keysub small { text-transform: none; letter-spacing: 0; font-weight: normal; }
 .ds svg [data-case] { transition: opacity var(--cds-dur-slow); }
 [data-dash-source-state=empty] { color: transparent; }
 [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
@@ -2273,7 +2278,19 @@ window.dsPrice = function (c, p, k, inc) {
     groups.forEach(([step, cs]) => {
       const g = document.createElement('div'); g.className = 'ds-keygroup';
       const h = document.createElement('h3'); h.textContent = step; g.append(h);
-      cs.forEach((c) => {
+      const subs = step.startsWith('2') ? d3.groups(cs, subOf) : [[null, cs]];
+      subs.sort((a, b) => SUBS.indexOf(a[0]) - SUBS.indexOf(b[0]));
+      subs.forEach(([sub, scs]) => {
+      if (sub && sub !== 'Injection') {
+        const open = !keyCollapsed[sub];
+        const sb = document.createElement('button'); sb.type = 'button'; sb.className = 'ds-keysub'; sb.setAttribute('aria-expanded', String(open));
+        const n = sub === 'The ladder' ? scs.length + ' levels' : scs.length + ' cases';
+        sb.append(document.createTextNode(sub + ' '), Object.assign(document.createElement('small'), { textContent: open ? '(' + n + ')' : sub === 'The ladder' ? '(' + n + ', the end shown)' : '(' + n + ', hidden)' }));
+        sb.addEventListener('click', () => { keyCollapsed[sub] = open; try { localStorage.setItem('ds-keyCollapsed', JSON.stringify(keyCollapsed)); } catch (e) {} el('case-key').replaceChildren(); el('case-key-cap').replaceChildren(); render(); });
+        g.append(sb);
+        if (!open) scs = sub === 'The ladder' ? scs.filter((c) => c.ladderLevel === d3.max(scs, (x) => x.ladderLevel)) : [];
+      }
+      scs.forEach((c) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'ds-keyitem'; b.dataset.case = c.id;
         const i = document.createElement('i'); i.style.borderColor = famColor(c.family); i.style.background = c.epoch === CUR_EPOCH ? famColor(c.family) : 'transparent';
         const id = document.createElement('b'); id.textContent = c.storedVariant ? c.id + ' ' + word : c.id;
@@ -2287,8 +2304,21 @@ window.dsPrice = function (c, p, k, inc) {
         b.addEventListener('click', () => { pinned = pinned === c.id ? null : c.id; highlight(pinned); });
         g.append(b);
       });
+      });
       box.append(g);
     });
+  }
+  // UI-1: the sub-groups of step 2 and which of them the key shows; a hidden case stays in the staircase's arithmetic and is drawn when it sits on the line
+  const SUBS = ['Injection', 'Efficiency projects', 'The ladder'];
+  const subOf = (c) => (Number(c.ladderLevel) > 0 ? 'The ladder' : c.family === 'Efficiency' ? 'Efficiency projects' : 'Injection');
+  let keyCollapsed = { 'Efficiency projects': true, 'The ladder': true };
+  try { const kc = JSON.parse(localStorage.getItem('ds-keyCollapsed') || 'null'); if (kc && typeof kc === 'object') keyCollapsed = { ...keyCollapsed, ...kc }; } catch (e) {}
+  function keyShown(c, cases) {
+    if (!String(c.step || '').startsWith('2')) return true;
+    const sub = subOf(c);
+    if (sub === 'Injection' || !keyCollapsed[sub]) return true;
+    if (sub === 'The ladder') return Number(c.ladderLevel) === d3.max(cases.filter((x) => Number(x.ladderLevel) > 0), (x) => Number(x.ladderLevel));
+    return false;
   }
   function legend(cases) {
     const fams = [...new Set(cases.map((c) => c.family))];
@@ -2975,8 +3005,9 @@ window.dsPrice = function (c, p, k, inc) {
     const zoomOpts = conv;
     if (active === 'staircase') {
       yfOpts = opts; yfPath = path; const yfPt = yfStairPoint(); const wholeOpts = yfPt ? opts.concat([yfPt]) : opts;
-      scatter('chart-whole', wholeOpts, path, wholeOpts, false);
-      scatter('chart-zoom', zoomOpts, path, zoomOpts, true);
+      const shown = (o) => o.you || path.includes(o) || keyShown(o.c, cases);   // UI-1
+      scatter('chart-whole', wholeOpts.filter(shown), path, wholeOpts, false);
+      scatter('chart-zoom', zoomOpts.filter(shown), path, zoomOpts, true);
     }
     if (active === 'prices') effectChart(cases, opts, ref);
     if (active === 'costs') buildup(cases, p, k, cap);
@@ -2987,7 +3018,7 @@ window.dsPrice = function (c, p, k, inc) {
     if (active === 'forces') drawForces();
     if (active === 'gasbalance') drawGasbalance();
     if (active === 'yourfurnace') drawYourfurnace();
-    el('closeup-note').textContent = 'The ' + zoomOpts.length + ' cases of steps 1 to 3 span ' + usd(d3.max(zoomOpts, (o) => o.cost) - d3.min(zoomOpts, (o) => o.cost)) + '/tHM in cost and ' + (d3.max(zoomOpts, (o) => o.emitted) - d3.min(zoomOpts, (o) => o.emitted)).toFixed(3) + ' t CO₂/tHM in emissions. Every point is labeled.';
+    el('closeup-note').textContent = 'The ' + zoomOpts.length + ' cases of steps 1 to 3 (' + zoomOpts.filter((o) => keyShown(o.c, cases)).length + ' shown; open the efficiency projects and the ladder in the key to see the rest) span ' + usd(d3.max(zoomOpts, (o) => o.cost) - d3.min(zoomOpts, (o) => o.cost)) + '/tHM in cost and ' + (d3.max(zoomOpts, (o) => o.emitted) - d3.min(zoomOpts, (o) => o.emitted)).toFixed(3) + ' t CO₂/tHM in emissions. Every point is labeled.';
     stepsTable(steps, ref);
     casesTable(cases, opts, ref);
 
