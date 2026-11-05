@@ -156,6 +156,8 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
 .ds-yf-form { display: grid; gap: var(--cds-gap-md); grid-template-columns: minmax(0, 1fr); } #yf-zones { min-width: 0; } .ds-yf-two { display: grid; gap: var(--cds-gap-lg); grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 1fr); align-items: start; } @media (max-width: 52rem) { .ds-yf-two { grid-template-columns: minmax(0, 1fr); } }
 .ds-yf-sec { display: grid; gap: var(--cds-gap-xs); align-content: start; min-width: 0; } .ds-yf-sec h3 { margin: 0; font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); letter-spacing: .04em; text-transform: uppercase; } .ds-yf-sec h4 { margin: var(--cds-gap-sm) 0 0; font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); }
 .ds-yf-fields { display: grid; gap: 6px 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr)); } .ds-yf-zonetools { display: flex; gap: var(--cds-gap-sm); align-items: center; flex-wrap: wrap; }
+.ds-kv.ds-kv-wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); } .ds-kv.ds-kv-wrap dd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.ds-yf-group { grid-column: 1 / -1; margin: 8px 0 0; font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg); border-top: 1px solid var(--color-border-line); padding-top: 6px; }
 .ds-yf-field { display: grid; gap: 2px; font-size: var(--cds-font-size-caption); min-width: 0; } .ds-yf-field[hidden] { display: none; } .ds-yf-field .lab { color: var(--color-fg-muted); } .ds-yf-field small { color: var(--color-fg-muted); font-size: 11px; } .ds-yf-field input, .ds-yf-field select, .ds-yf-cell { font: inherit; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; padding: 3px 6px; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); min-width: 0; width: 100%; box-sizing: border-box; } .ds-yf-cell { width: auto; min-width: 5rem; }
 .ds-yf-text { font: inherit; font-size: 12px; font-family: var(--font-anthropic-mono, monospace); width: 100%; box-sizing: border-box; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); padding: 6px; }
 .ds-note.warn { color: var(--color-warn); } .ds-note.bad { color: var(--color-bad); } .ds td.warn { color: var(--color-warn); }
@@ -565,7 +567,7 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
     </section>
 
     <section class="ds-panel" role="tabpanel" id="yourfurnace" aria-labelledby="tab-yourfurnace" hidden>
-      <p class="ds-note" id="yourfurnace-intro">Your own furnace and one base operating period, beside the sample furnace. Every field starts as the sample furnace (the dashboard’s case B: PCI 100 kg at air blast, 6,500 t/d on a pellet burden), so change only what differs. As you type, the page (1) checks the numbers with conservation arithmetic only, no model physics: the iron balance, the carbon balance on the nitrogen tie (every N₂ in the top gas came in with the blast or the fuels, which sizes the dry gas), the oxygen balance with hydrogen, and the slag balance, each with the measurement it points at when it does not close; (2) prices the base period on the staircase at the prices on the Prices tab, from your own consumptions, with the CO₂ at the furnace gate from the carbon in; (3) draws the furnace to scale beside the sample furnace with its tuyeres, stockline and cooling zones; and (4) writes a file the model runner loads to solve your furnace at its own limits and walk it up the staircase. Nothing is sent anywhere: the entries stay in this page until you download the file or save them for yourself. Metric units; the model’s own cells are named in the record where a field maps to one.</p>
+      <p class="ds-note" id="yourfurnace-intro">Your own furnace and one base operating period, beside the sample furnace. Every field starts as the sample furnace (the dashboard’s case B: PCI 100 kg at air blast, 6,500 t/d on a pellet burden), so change only what differs. As you type, the page (1) checks the numbers with conservation arithmetic only, no model physics: the iron balance, the carbon balance on the nitrogen tie (every N₂ in the top gas came in with the blast or the fuels, which sizes the dry gas), the oxygen balance with hydrogen, and the slag balance, each with the measurement it points at when it does not close; (2) prices the base period on the staircase at the prices on the Prices tab, from your own consumptions, with the CO₂ at the furnace gate from the carbon in; (3) draws the furnace to scale beside the sample furnace with its tuyeres, stockline and cooling zones; (4) takes the sizing and strength of every raw material on the test your plant reports (coke cold strength on ASTM, Micum, IRSID or JIS; CSR and CRI; the ferrous burden on the ISO tumble, compression, disintegration and reducibility tests; a mean size with the fines and oversize fractions for each; bulk densities) and shows them as the model’s own cells will take them, with the coke charge-volume fraction on your densities and the coke change the model’s measured slopes indicate; and (5) writes a file the model runner loads to solve your furnace at its own limits and walk it up the staircase. Nothing is sent anywhere: the entries stay in this page until you download the file or save them for yourself. Metric units; the model’s own cells are named in the record where a field maps to one.</p>
       <section class="ds-card" id="yf-card">
         <div class="ds-row">
           <h2 id="yf-title">Your furnace</h2>
@@ -606,7 +608,7 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
         <h2>The file for a model run</h2>
         <p class="ds-note" id="yf-export-note"></p>
         <textarea id="yf-export-text" class="ds-yf-text" rows="12" hidden spellcheck="false"></textarea>
-        <p class="ds-feed-note">What is computed here: balances and readouts from your entries, by conservation, and the works-basis cost by the page’s own recipe. What is not: coke rate, flame temperature, top gas temperature, permeability and the staircase steps for your furnace, which need the model; the file carries your entries to it.</p>
+        <p class="ds-feed-note">What is computed here: balances and readouts from your entries, by conservation; the works-basis cost by the page’s own recipe; the coke cold-strength map between test standards (a placeholder on anchor pairs, shown beside the result); the charge volumes on your bulk densities; and a coke-change estimate from the model’s measured slopes at the sample furnace (one lever at a time, not a solve). What is not: coke rate, flame temperature, top gas temperature, permeability and the staircase steps for your furnace, which need the model; the file carries your entries, including the sizing and strength as reported, to it.</p>
       </section>
     </section>
 
@@ -2150,7 +2152,10 @@ window.drawEfficiencyInto = drawEfficiencyInto;
 /* The Your furnace tab (YF-1, 2026-10-26). A plant engineer enters their own furnace and one base operating period;
    the page (1) checks the numbers with conservation arithmetic only (iron, carbon on the nitrogen tie, oxygen with
    hydrogen, slag), (2) prices the base period on the staircase at the page's prices, (3) draws the furnace to scale
-   beside the sample furnace, and (4) exports the entries as a file for a model run. Every field starts as the sample
+   beside the sample furnace, (4) takes the raw materials' sizing and strength on the tests each plant reports (SS-1,
+   2026-11-05: ASTM, Micum, IRSID or JIS coke drums; ISO tumble, compression, disintegration and reducibility for the
+   ferrous burden; a mean size with fines and oversize for each) and shows them as the model's cells will take them, and
+   (5) exports the entries as a file for a model run (schema bf-your-furnace/2). Every field starts as the sample
    furnace (the dashboard's case B: PCI 100 kg at air blast, 6,500 t/d on a pellet burden), so an engineer changes only
    what differs. Nothing is sent anywhere: the entries stay in the page until exported or saved for the viewer.
    Entry: drawYourfurnaceInto(root, ctx) with ctx = {dash, d3, tooltip, k (deck constants), p (prices), cap (capital
@@ -2255,9 +2260,6 @@ function yfSchema(s) {
       { key: 'cokeN', def_: n(ck.N, 0.97), label: 'Coke N', unit: 'wt%', def: 0.97, step: 0.01 },
       { key: 'cokeAsh', def_: n(ck.ash, 9.22), label: 'Coke ash', unit: 'wt%', def: 9.22, step: 0.01 },
       { key: 'cokeH2O', def_: n(ck.H2O, 5), label: 'Coke moisture, as charged', unit: 'wt%', def: 5, step: 0.1 },
-      { key: 'cokeCSR', label: 'Coke CSR', unit: '%', def: n(ck.q_CSR, 62), step: 1 },
-      { key: 'cokeCRI', label: 'Coke CRI', unit: '%', def: n(ck.q_CRI, 25), step: 1 },
-      { key: 'cokeSize', label: 'Coke mean size', unit: 'mm', def: n(ck.q_size, 50), step: 1 },
       { key: 'pciC', def_: n(pc.C, 75.13), label: 'PCI coal C', unit: 'wt%', def: 75.13, step: 0.01 },
       { key: 'pciH', def_: n(pc.H, 5.1), label: 'PCI coal H', unit: 'wt%', def: 5.1, step: 0.01 },
       { key: 'pciO', def_: n(pc.O, 8.05), label: 'PCI coal O', unit: 'wt%', def: 8.05, step: 0.01 },
@@ -2267,6 +2269,62 @@ function yfSchema(s) {
       { key: 'lances', label: 'Lances per tuyere', type: 'select', options: ['1', '2'], def: '1' },
       { key: 'ngC', label: 'Natural gas C', unit: 'wt%', def: n(ngm.C, 73.5), step: 0.1 },
       { key: 'ngH', label: 'Natural gas H', unit: 'wt%', def: n(ngm.H, 24), step: 0.1 },
+    ] },
+    // SS-1 (2026-11-05, Joe: "include raw material sizing and strength; handle processes with different strengths and granularity"):
+    // every material enters on the test its plant reports -- coke cold strength on ASTM, Micum, IRSID or JIS; the ferrous burden on
+    // ISO tumble, compression, disintegration and reducibility; sizes as a mean with the fines and oversize fractions. The defaults are
+    // the sample furnace's (the model's coke spec AD83:AI83 and its size table 01_Inputs rows 113-121); the typical bands in the notes
+    // are literature class, not plant data.
+    { id: 'materials', title: 'Sizing and strength', fields: [
+      { key: 'cokeSize', group: 'Coke', label: 'Coke mean size, as charged', unit: 'mm', def: n(ck.q_size, 50), step: 1, note: 'The model’s charged size (01_Inputs!AH83). Typical 45–60.' },
+      { key: 'cokeFines', group: 'Coke', label: 'Coke −25 mm after screening', unit: 'wt%', def: 2, step: 0.5, note: 'Placeholder 2 % at the sample furnace.' },
+      { key: 'cokeOver', group: 'Coke', label: 'Coke +80 mm', unit: 'wt%', def: 5, step: 0.5, note: 'Placeholder 5 % at the sample furnace.' },
+      { key: 'nutCoke', group: 'Coke', label: 'Nut coke charged with the ore', unit: 'kg/tHM', def: 0, step: 1, note: 'Part of the coke rate above, not added to it.' },
+      { key: 'nutCokeSize', group: 'Coke', label: 'Nut coke mean size', unit: 'mm', def: 18, step: 1 },
+      { key: 'cokeStd', group: 'Coke', label: 'Cold strength reported as', type: 'select', options: ['ASTM stability / hardness', 'Micum M40 / M10', 'IRSID I40 / I10', 'JIS DI 150/15'], def: 'ASTM stability / hardness', note: 'Enter the test your plant runs; the page maps it to the model’s stability and hardness (a placeholder map, shown below).' },
+      { key: 'cokeStability', group: 'Coke', label: 'Stability (ASTM D3402, +1 in)', unit: '%', def: n(ck.q_stability, 60), step: 0.5, when: 'cokeStd=ASTM stability / hardness', note: 'Typical 55–65.' },
+      { key: 'cokeHardness', group: 'Coke', label: 'Hardness (ASTM D3402, +¼ in)', unit: '%', def: n(ck.q_hardness, 67), step: 0.5, when: 'cokeStd=ASTM stability / hardness', note: 'Typical 65–70.' },
+      { key: 'cokeM40', group: 'Coke', label: 'Micum M40 (ISO 556, +40 mm)', unit: '%', def: 78, step: 0.5, when: 'cokeStd=Micum M40 / M10', note: 'Typical 75–85.' },
+      { key: 'cokeM10', group: 'Coke', label: 'Micum M10 (ISO 556, −10 mm)', unit: '%', def: 7, step: 0.1, when: 'cokeStd=Micum M40 / M10', note: 'Typical 5–8.' },
+      { key: 'cokeI40', group: 'Coke', label: 'IRSID I40 (+40 mm)', unit: '%', def: 55, step: 0.5, when: 'cokeStd=IRSID I40 / I10', note: 'Typical 50–60.' },
+      { key: 'cokeI10', group: 'Coke', label: 'IRSID I10 (−10 mm)', unit: '%', def: 20, step: 0.5, when: 'cokeStd=IRSID I40 / I10', note: 'Typical 17–22.' },
+      { key: 'cokeDI', group: 'Coke', label: 'DI 150/15 (JIS K2151, +15 mm)', unit: '%', def: 85, step: 0.5, when: 'cokeStd=JIS DI 150/15', note: 'Typical 83–88.' },
+      { key: 'cokeCSR', group: 'Coke', label: 'CSR (ISO 18894 / ASTM D5341)', unit: '%', def: n(ck.q_CSR, 62), step: 0.5, note: 'Hot strength after reaction; typical 55–70. The model’s 01_Inputs!AF83.' },
+      { key: 'cokeCRI', group: 'Coke', label: 'CRI (ISO 18894 / ASTM D5341)', unit: '%', def: n(ck.q_CRI, 25), step: 0.5, note: 'Reactivity; typical 20–30. The model’s 01_Inputs!AG83.' },
+      { key: 'cokeBulk', group: 'Coke', label: 'Coke bulk density, as charged', unit: 't/m³', def: 0.50, step: 0.01, note: 'The model books 0.50 (the coke charge-volume lever).' },
+      { key: 'pelletSize', group: 'Pellet', label: 'Pellet mean size', unit: 'mm', def: 12, step: 0.5, note: 'The model’s size table reads 12 (8–16).' },
+      { key: 'pelletFines', group: 'Pellet', label: 'Pellet −6.3 mm', unit: 'wt%', def: 3, step: 0.5, note: 'Placeholder 3 %.' },
+      { key: 'pelletOver', group: 'Pellet', label: 'Pellet +16 mm', unit: 'wt%', def: 3, step: 0.5, note: 'Placeholder 3 %.' },
+      { key: 'pelletCCS', group: 'Pellet', label: 'Cold compression strength (ISO 4700)', unit: 'daN/pellet', def: 250, step: 5, note: 'Typical 200–300; below 150 the bed breaks down in the stack.' },
+      { key: 'pelletTI', group: 'Pellet', label: 'Tumble index (ISO 3271, +6.3 mm)', unit: '%', def: 94, step: 0.5, note: 'Typical 92–96.' },
+      { key: 'pelletAI', group: 'Pellet', label: 'Abrasion index (ISO 3271, −0.5 mm)', unit: '%', def: 4, step: 0.5, note: 'Typical 3–6.' },
+      { key: 'pelletLTD', group: 'Pellet', label: 'Low-temperature disintegration (ISO 13930, +6.3 mm)', unit: '%', def: 85, step: 0.5, note: 'Typical 80–95.' },
+      { key: 'pelletRI', group: 'Pellet', label: 'Reducibility (ISO 7215, at 180 min)', unit: '%', def: 70, step: 0.5, note: 'Typical 65–75.' },
+      { key: 'pelletSwell', group: 'Pellet', label: 'Swelling (ISO 4698)', unit: '%', def: 15, step: 0.5, note: 'Typical 10–18; above 20 is a bed hazard.' },
+      { key: 'pelletBulk', group: 'Pellet', label: 'Pellet bulk density', unit: 't/m³', def: 2.10, step: 0.01, note: 'The model books 2.10 (04_Radial_Ergun!W6).' },
+      { key: 'sinterSize', group: 'Sinter', label: 'Sinter mean size', unit: 'mm', def: 18, step: 0.5, note: 'The model’s size table reads 18 (5–35).' },
+      { key: 'sinterFines', group: 'Sinter', label: 'Sinter −5 mm, as charged', unit: 'wt%', def: 5, step: 0.5, note: 'After the plant’s return-fines screen. Placeholder 5 %.' },
+      { key: 'sinterOver', group: 'Sinter', label: 'Sinter +40 mm', unit: 'wt%', def: 5, step: 0.5 },
+      { key: 'sinterTI', group: 'Sinter', label: 'Tumble index (ISO 3271, +6.3 mm)', unit: '%', def: 75, step: 0.5, note: 'Typical 70–80.' },
+      { key: 'sinterRDI', group: 'Sinter', label: 'Reduction disintegration (ISO 4696-1, −3.15 mm)', unit: '%', def: 30, step: 0.5, note: 'Typical 25–35; above 35 the upper stack fines up.' },
+      { key: 'sinterRI', group: 'Sinter', label: 'Reducibility (ISO 7215, at 180 min)', unit: '%', def: 65, step: 0.5, note: 'Typical 60–70.' },
+      { key: 'sinterBulk', group: 'Sinter', label: 'Sinter bulk density', unit: 't/m³', def: 1.90, step: 0.01, note: 'The model books 1.90 (04_Radial_Ergun!W5).' },
+      { key: 'lumpSize', group: 'Lump ore', label: 'Lump mean size', unit: 'mm', def: 25, step: 0.5, note: 'The model’s size table reads 25 (10–45).' },
+      { key: 'lumpFines', group: 'Lump ore', label: 'Lump −6.3 mm', unit: 'wt%', def: 5, step: 0.5 },
+      { key: 'lumpOver', group: 'Lump ore', label: 'Lump +40 mm', unit: 'wt%', def: 5, step: 0.5 },
+      { key: 'lumpTI', group: 'Lump ore', label: 'Tumble index (ISO 3271, +6.3 mm)', unit: '%', def: 85, step: 0.5 },
+      { key: 'lumpDecrep', group: 'Lump ore', label: 'Decrepitation (ISO 8371, −6.3 mm)', unit: '%', def: 5, step: 0.5, note: 'Typical under 10.' },
+      { key: 'lumpRDI', group: 'Lump ore', label: 'Reduction disintegration (ISO 4696-1, −3.15 mm)', unit: '%', def: 25, step: 0.5 },
+      { key: 'lumpRI', group: 'Lump ore', label: 'Reducibility (ISO 7215, at 180 min)', unit: '%', def: 55, step: 0.5 },
+      { key: 'lumpBulk', group: 'Lump ore', label: 'Lump bulk density', unit: 't/m³', def: 2.20, step: 0.01 },
+      { key: 'metallicSize', group: 'HBI, DRI or scrap', label: 'Metallic mean size', unit: 'mm', def: 30, step: 1, note: 'The model’s size table reads 30 for HBI/DRI, 50 for scrap.' },
+      { key: 'metallicFines', group: 'HBI, DRI or scrap', label: 'Metallic −6.3 mm (DRI fines)', unit: 'wt%', def: 3, step: 0.5 },
+      { key: 'metallicTI', group: 'HBI, DRI or scrap', label: 'Tumble index (ISO 3271, +6.3 mm)', unit: '%', def: 90, step: 0.5, note: 'HBI; not meaningful for scrap.' },
+      { key: 'metallicBulk', group: 'HBI, DRI or scrap', label: 'Metallic bulk density', unit: 't/m³', def: 2.50, step: 0.01, note: 'HBI 2.5–3.2; scrap 1–2.' },
+      { key: 'pciHGI', group: 'PCI coal and fluxes', label: 'Coal Hardgrove grindability (HGI)', unit: 'index', def: 55, step: 1, note: 'Typical 45–70; sets the mill rate and the grind.' },
+      { key: 'pciGrind', group: 'PCI coal and fluxes', label: 'Coal grind, −75 µm', unit: 'wt%', def: 75, step: 1, note: 'Typical 70–80 for pulverized injection; granular practice 20–40.' },
+      { key: 'pciAFT', group: 'PCI coal and fluxes', label: 'Coal ash fusion temperature (reducing)', unit: '°C', def: n(pc.q_ashFusion, 1238), step: 5, note: 'The model’s 01_Inputs!AA88, a placeholder; feeds the raceway ash-attack term.' },
+      { key: 'fluxSize', group: 'PCI coal and fluxes', label: 'Limestone and dolomite mean size', unit: 'mm', def: 25, step: 1, note: 'Typical 15–40 as charged.' },
     ] },
     { id: 'heat', title: 'Heat loss (optional)', fields: [
       { key: 'heatMode', label: 'Heat loss known as', type: 'select', options: ['not measured', 'furnace total', 'by zone'], def: 'not measured' },
@@ -2393,6 +2451,8 @@ function yfCompute(s, zones) {
   out.co2gross = Math.max(0, cIn - cHM - g('dustC')) * YF.MW.CO2 / YF.MW.C / 1000;
   // top gas energy on the dry gas (LHV)
   out.topGasMJ = vDry * (co / 100 * YF.LHV.CO + h2 / 100 * YF.LHV.H2);
+  // sizing and strength (SS-1): what the model's own cells will take, and the plant's bed as its charge sees it
+  out.mat = yfMaterials(s);
   // heat loss
   if (s.heatMode === 'furnace total') { const MW = g('waterFlow') / 3600 * 1000 * 4.186 * g('waterDT') / 1000; out.heatMW = MW; out.heatMJ = prod > 0 ? MW * 86400 / prod : 0; }
   // flags
@@ -2403,10 +2463,65 @@ function yfCompute(s, zones) {
   band(out.oResidualPct, 4, 'The oxygen balance', 'Check the moisture, the FeO of the burden and the top gas CO₂.');
   if (sum > 0 && Math.abs(sum - 100) <= 0.5 && n2 > 0 && g('gasN2') > 0) { const n2diff = 100 - co - co2 - h2; if (Math.abs(n2diff - g('gasN2')) > 1) out.flags.push({ level: 'warn', text: 'N₂ by difference reads ' + n2diff.toFixed(1) + ' % against the entered ' + g('gasN2').toFixed(1) + ' %.' }); }
   if (g('nTuyActive') > g('nTuy')) out.flags.push({ level: 'bad', text: 'More tuyeres active than installed.' });
+  out.mat.flags.forEach((f) => out.flags.push(f));
   if (out.kePerTuyere > 0 && (out.kePerTuyere < 100 || out.kePerTuyere > 200)) out.flags.push({ level: 'warn', text: 'Kinetic energy per tuyere ' + out.kePerTuyere.toFixed(0) + ' kW; the sample furnace is sized for 130–160.' });
   if (g('workingVol') > 0 && Math.abs(out.volumeGap) / g('workingVol') > 0.1) out.flags.push({ level: 'warn', text: 'The profile drawn holds ' + out.profileVol.toFixed(0) + ' m³ to the stockline against the stated working volume of ' + g('workingVol').toFixed(0) + ' m³.' });
   if (zones && zones.length) { const zs = zones.slice().sort((a, b) => a.from - b.from); for (let i = 1; i < zs.length; i++) if (zs[i].from < zs[i - 1].to - 1e-9) { out.flags.push({ level: 'warn', text: 'Cooling zones overlap at ' + zs[i].from + ' m.' }); break; } }
   return out;
+}
+
+// ---- sizing and strength (SS-1, 2026-11-05): the plant's materials as the model's cells take them ----
+// Cold-strength map between test standards: a PLACEHOLDER built on anchor pairs for a "good furnace coke" on each standard
+// (stability 60 / hardness 67 <-> M40 78 / M10 7 <-> I40 55 / I10 20 <-> DI 150/15 85) with unit slopes; no published
+// conversion between the drums exists, so the map is shown beside the entry and the entry itself travels in the file.
+const YF_COKE_MAP = {
+  'ASTM stability / hardness': (g) => ({ stability: g('cokeStability'), hardness: g('cokeHardness'), note: 'entered on the model’s own standard' }),
+  'Micum M40 / M10': (g) => ({ stability: 60 + (g('cokeM40') - 78) * 1.0, hardness: 67 - (g('cokeM10') - 7) * 2.0, note: 'placeholder map: stability = 60 + (M40 − 78), hardness = 67 − 2 × (M10 − 7)' }),
+  'IRSID I40 / I10': (g) => ({ stability: 60 + (g('cokeI40') - 55) * 1.0, hardness: 67 - (g('cokeI10') - 20) * 1.0, note: 'placeholder map: stability = 60 + (I40 − 55), hardness = 67 − (I10 − 20)' }),
+  'JIS DI 150/15': (g) => ({ stability: 60 + (g('cokeDI') - 85) * 2.0, hardness: 67, note: 'placeholder map: stability = 60 + 2 × (DI − 85); hardness held at 67' }),
+};
+// the model's measured responses at the sample furnace, one lever at a time (CQ-2 probe 2026-11-02; UF-1 probe 2026-11-03), kg coke/tHM per unit
+const YF_SLOPES = { cri: 2.22 / 3, csr: -1.76 / 6, cokeSizeMM: -3.2 / 8 };
+function yfMaterials(s) {
+  const g = (k) => Number(s[k]) || 0;
+  const m = { flags: [] };
+  const map = (YF_COKE_MAP[s.cokeStd] || YF_COKE_MAP['ASTM stability / hardness'])(g);
+  m.cokeStability = map.stability; m.cokeHardness = map.hardness; m.cokeMapNote = map.note;
+  m.cokeDI = s.cokeStd === 'JIS DI 150/15' ? g('cokeDI') : 85 + (m.cokeStability - 60) * 0.5;   // the model's AI83 placeholder band 82-88
+  // the model's effective sizes (01_Inputs!B126/B127: the rate-weighted mean over the materials charged); nut coke is part of the coke rate
+  const nut = Math.min(g('nutCoke'), g('coke')), lump = g('coke') - nut;
+  m.cokeMeanModel = g('coke') > 0 ? (lump * g('cokeSize') + nut * g('nutCokeSize')) / g('coke') : g('cokeSize');
+  const ore = [['pellet', 'pelletSize', 'pelletBulk', 'pelletFines'], ['sinter', 'sinterSize', 'sinterBulk', 'sinterFines'], ['lump', 'lumpSize', 'lumpBulk', 'lumpFines'], ['metallic', 'metallicSize', 'metallicBulk', 'metallicFines']];
+  const oreRate = ore.reduce((a, [r]) => a + g(r), 0);
+  m.oreMeanModel = oreRate > 0 ? ore.reduce((a, [r, sz]) => a + g(r) * g(sz), 0) / oreRate : 0;
+  m.oreFinesKg = ore.reduce((a, [r, , , fn]) => a + g(r) * g(fn) / 100, 0);
+  m.cokeFinesKg = g('coke') * g('cokeFines') / 100;
+  // the charge as volumes: the coke charge-volume fraction on the plant's own bulk densities (the model's lever for the max-injection bind)
+  const cokeVol = g('cokeBulk') > 0 ? g('coke') / 1000 / g('cokeBulk') : 0;
+  const oreVol = ore.reduce((a, [r, , bk]) => a + (g(bk) > 0 ? g(r) / 1000 / g(bk) : 0), 0) + (g('limestone') + g('dolomite') + g('quartzite')) / 1000 / 1.6;
+  m.cokeVol = cokeVol; m.oreVol = oreVol; m.cokeVolFrac = cokeVol + oreVol > 0 ? cokeVol / (cokeVol + oreVol) : 0;
+  m.oreCokeMass = g('coke') > 0 ? oreRate / g('coke') : 0;
+  // the model's measured slopes, applied to the plant's coke against the sample's (one lever at a time, at the sample furnace)
+  const dCRI = g('cokeCRI') - 25, dCSR = g('cokeCSR') - 62, dSize = m.cokeMeanModel - 50;
+  m.slopeKg = { cri: dCRI * YF_SLOPES.cri, csr: dCSR * YF_SLOPES.csr, size: dSize * YF_SLOPES.cokeSizeMM };
+  m.slopeKgTotal = m.slopeKg.cri + m.slopeKg.csr + m.slopeKg.size;
+  m.chimneyRatio = m.oreMeanModel > 0 ? 12 / m.oreMeanModel : 0;   // the chimney index scales as 1/d_ore (PB-2); the sample's pellet is 12 mm
+  // flags: literature-class bands, a warning where a plant's material sits outside them
+  const w = (cond, text) => { if (cond) m.flags.push({ level: 'warn', text }); };
+  w(g('cokeCSR') < 55, 'Coke CSR ' + g('cokeCSR') + ' % is below the 55 % most high-injection furnaces hold; the model’s fines chain will read a weaker bed.');
+  w(g('cokeCRI') > 30, 'Coke CRI ' + g('cokeCRI') + ' % is above 30 %; the model moves the thermal reserve zone down with reactivity.');
+  w(m.cokeStability < 52, 'Coke cold strength maps to stability ' + m.cokeStability.toFixed(1) + ' (below 52): expect more fines to the tuyeres.');
+  w(g('cokeFines') > 8, 'Coke −25 mm ' + g('cokeFines') + ' % as charged is high; screened coke runs 2–5 %.');
+  w(g('pellet') > 0 && g('pelletCCS') < 150, 'Pellet compression strength ' + g('pelletCCS') + ' daN is below 150; pellets break down in the stack.');
+  w(g('pellet') > 0 && g('pelletSwell') > 20, 'Pellet swelling ' + g('pelletSwell') + ' % is above 20 %: a bed hazard.');
+  w(g('pellet') > 0 && g('pelletTI') < 90, 'Pellet tumble index ' + g('pelletTI') + ' % is below 90 %.');
+  w(g('sinter') > 0 && g('sinterRDI') > 35, 'Sinter RDI ' + g('sinterRDI') + ' % is above 35 %: the upper stack fines up on reduction.');
+  w(g('sinter') > 0 && g('sinterTI') < 65, 'Sinter tumble index ' + g('sinterTI') + ' % is below 65 %.');
+  w(g('lump') > 0 && g('lumpDecrep') > 10, 'Lump decrepitation ' + g('lumpDecrep') + ' % is above 10 %.');
+  w(g('pci') > 0 && g('pciGrind') < 60 && g('pciGrind') > 45, 'Coal grind ' + g('pciGrind') + ' % −75 µm is between pulverized and granular practice; burnout falls with the coarser grind.');
+  w(m.oreFinesKg > 0.06 * oreRate && oreRate > 0, 'Ferrous fines under 6.3 mm total ' + m.oreFinesKg.toFixed(0) + ' kg/tHM (' + (100 * m.oreFinesKg / oreRate).toFixed(1) + ' % of the burden).');
+  w(g('cokeVolMin') > 0 && m.cokeVolFrac < g('cokeVolMin'), 'The coke charge-volume fraction on your bulk densities is ' + m.cokeVolFrac.toFixed(2) + ', below the ' + g('cokeVolMin') + ' you entered as the trouble line.');
+  return m;
 }
 
 // ---- the pseudo-case the page's pricing takes ----
@@ -2514,7 +2629,9 @@ function drawYourfurnaceInto(root, ctx) {
       const card = document.createElement('section'); card.className = 'ds-yf-sec'; card.id = 'yf-sec-' + sec.id;
       const h = document.createElement('h3'); h.textContent = sec.title; card.append(h);
       const grid = document.createElement('div'); grid.className = 'ds-yf-fields';
+      let lastGroup = null;
       sec.fields.forEach((f) => {
+        if (f.group && f.group !== lastGroup) { const gh = document.createElement('h4'); gh.className = 'ds-yf-group'; gh.textContent = f.group; grid.append(gh); lastGroup = f.group; }
         const wrap = document.createElement('label'); wrap.className = 'ds-yf-field'; wrap.dataset.key = f.key; if (f.when) wrap.dataset.when = f.when;
         const name = document.createElement('span'); name.className = 'lab'; name.textContent = f.label + (f.unit ? ' (' + f.unit + ')' : ''); wrap.append(name);
         let inp;
@@ -2575,6 +2692,20 @@ function drawYourfurnaceInto(root, ctx) {
       ...(r.heatMW != null ? [['Heat loss from the water', f1(r.heatMW, 1) + ' MW = ' + f1(r.heatMJ, 0) + ' MJ/tHM' + (s.waterSystem === 'evaporative spray' ? ' (flow × ΔT misses the evaporation)' : '')]] : [])]
       .forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); });
     kv.append(dl);
+    // sizing and strength: what the model's cells will take, and the bed as the plant charges it (SS-1)
+    const mt = r.mat, h4 = document.createElement('h4'); h4.textContent = 'Raw materials as the model will take them'; kv.append(h4);
+    const dl3 = document.createElement('dl'); dl3.className = 'ds-kv ds-kv-wrap';
+    const sgn = (v, d = 1) => (v > 0 ? '+' : '') + Number(v).toFixed(d);
+    [['Coke cold strength to the model (stability / hardness)', f1(mt.cokeStability, 1) + ' / ' + f1(mt.cokeHardness, 1) + ' — ' + mt.cokeMapNote],
+      ['Coke hot strength to the model (CSR / CRI)', f1(g('cokeCSR'), 1) + ' / ' + f1(g('cokeCRI'), 1) + (s.cokeStd === 'JIS DI 150/15' ? '' : ' · DI 150/15 placeholder ' + f1(mt.cokeDI, 1))],
+      ['Coke mean size to the model (with nut coke)', f1(mt.cokeMeanModel, 1) + ' mm · −25 mm fines ' + f1(mt.cokeFinesKg, 1) + ' kg/tHM'],
+      ['Ferrous burden mean size to the model (rate-weighted)', f1(mt.oreMeanModel, 1) + ' mm · −6.3 mm fines ' + f1(mt.oreFinesKg, 0) + ' kg/tHM'],
+      ['Chimney index against the sample pellet (∝ 1/size, PB-2)', mt.chimneyRatio > 0 ? '× ' + f1(mt.chimneyRatio, 2) : '—'],
+      ['Charge volumes on your bulk densities', f1(mt.cokeVol, 3) + ' m³ coke + ' + f1(mt.oreVol, 3) + ' m³ ore and flux per tHM'],
+      ['Coke charge-volume fraction', f1(mt.cokeVolFrac, 3) + ' (trouble line entered: ' + f1(g('cokeVolMin'), 2) + ') · ore/coke ' + f1(mt.oreCokeMass, 2) + ' by mass'],
+      ['Coke change the model’s measured slopes indicate, vs the sample coke', sgn(mt.slopeKgTotal) + ' kg/tHM (CRI ' + sgn(mt.slopeKg.cri) + ' · CSR ' + sgn(mt.slopeKg.csr) + ' · size ' + sgn(mt.slopeKg.size) + '; one lever at a time at the sample furnace, placeholder exponents, not a solve)']]
+      .forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl3.append(dt, dd); });
+    kv.append(dl3);
     const fl = el('yf-flags'); fl.replaceChildren();
     if (!r.flags.length) { const p = document.createElement('p'); p.className = 'ds-note good'; p.textContent = 'Every balance closes inside its band.'; fl.append(p); }
     r.flags.forEach((f) => { const p = document.createElement('p'); p.className = 'ds-note ' + f.level; p.textContent = f.text; fl.append(p); });
@@ -2597,7 +2728,13 @@ function drawYourfurnaceInto(root, ctx) {
   function exportObject() {
     const r = yfLast || yfCompute(yfState, yfZones);
     const sections = {}; schema.forEach((sec) => { sections[sec.id] = {}; sec.fields.forEach((f) => { sections[sec.id][f.key] = { value: yfValue(f.key, yfState, sample), unit: f.unit || (f.type || 'text'), label: f.label }; }); });
-    return { schema: 'bf-your-furnace/1', saved_at: new Date().toISOString(), units: 'metric', sample_furnace: 'case B of the staircase dashboard (PCI 100 kg, air blast, 6,500 t/d, pellet burden)', sections, zones: yfZones,
+    const mt = r.mat || yfMaterials(yfState);
+    return { schema: 'bf-your-furnace/2', saved_at: new Date().toISOString(), units: 'metric', sample_furnace: 'case B of the staircase dashboard (PCI 100 kg, air blast, 6,500 t/d, pellet burden)', sections, zones: yfZones,
+      model_levers: { coke_stability_AD83: mt.cokeStability, coke_hardness_AE83: mt.cokeHardness, coke_CSR_AF83: Number(yfValue('cokeCSR', yfState, sample)), coke_CRI_AG83: Number(yfValue('cokeCRI', yfState, sample)), coke_size_AH83: mt.cokeMeanModel, coke_DI_AI83_placeholder: mt.cokeDI, cold_strength_map: mt.cokeMapNote,
+        ore_mean_size_B126: mt.oreMeanModel, size_table_rows_113_118: { coke: Number(yfValue('cokeSize', yfState, sample)), sinter: Number(yfValue('sinterSize', yfState, sample)), pellet: Number(yfValue('pelletSize', yfState, sample)), lump: Number(yfValue('lumpSize', yfState, sample)), metallic: Number(yfValue('metallicSize', yfState, sample)), nut_coke: Number(yfValue('nutCokeSize', yfState, sample)) },
+        bulk_density_t_m3: { coke_R108: Number(yfValue('cokeBulk', yfState, sample)), pellet_W6: Number(yfValue('pelletBulk', yfState, sample)), sinter_W5: Number(yfValue('sinterBulk', yfState, sample)), lump: Number(yfValue('lumpBulk', yfState, sample)), metallic: Number(yfValue('metallicBulk', yfState, sample)) },
+        coke_charge_volume_fraction: mt.cokeVolFrac, coal_ash_fusion_AA88: Number(yfValue('pciAFT', yfState, sample)),
+        measured_slope_estimate_kg_coke: mt.slopeKg, note: 'cold-strength map and slope estimate are placeholders; the runner takes the entries and solves' },
       checks: { iron: { in: r.feIn, out: r.feOut, residual_pct: r.feResidualPct }, carbon: { in: r.cIn, out: r.cOut, residual_pct: r.cResidualPct, dry_gas_nm3_thm: r.vDry }, oxygen: { in: r.oIn, out: r.oOut, residual_pct: r.oResidualPct }, slag: { in: r.gangueIn, out: r.slagOx, residual_pct: r.slagResidualPct }, flags: r.flags.map((f) => f.text) },
       derived: { fuel_rate: r.fuelRate, eta_co: r.etaCO, eta_h2: r.etaH2, wind_nm3_thm: r.windTHM, purchased_o2_kg_thm: r.purchO2kg, tuyere_velocity_m_s: r.tuyereVelocity, ke_per_tuyere_kw: r.kePerTuyere, co2_gross_t_thm: r.co2gross, top_gas_mj_thm: r.topGasMJ, profile_volume_m3: r.profileVol },
       prices: ctx.p };
@@ -2615,7 +2752,7 @@ function drawYourfurnaceInto(root, ctx) {
     rd.readAsText(file);
   }
   function applyObject(obj) {
-    if (!obj || obj.schema !== 'bf-your-furnace/1') throw new Error('schema');
+    if (!obj || !['bf-your-furnace/1', 'bf-your-furnace/2'].includes(obj.schema)) throw new Error('schema');
     const st = yfDefaults(sample);
     Object.values(obj.sections || {}).forEach((sec) => Object.entries(sec).forEach(([k, v]) => { if (k in st) st[k] = v && typeof v === 'object' ? v.value : v; }));
     yfTouched = true; yfState = st; yfZones = Array.isArray(obj.zones) && obj.zones.length ? obj.zones.map((z) => ({ name: String(z.name || ''), from: Number(z.from) || 0, to: Number(z.to) || 0, cooling: String(z.cooling || ''), lining: String(z.lining || '') })) : YF_ZONE_DEFAULTS(sample.rw);
