@@ -2747,7 +2747,7 @@ window.dsPrice = function (c, p, k, inc) {
   let built = false;
   const TABS = ['readme', 'staircase', 'prices', 'capital', 'costs', 'steps', 'cases', 'materials', 'charging', 'furnace', 'raceway', 'products', 'forces', 'gasbalance', 'stoves', 'atoms', 'efficiency', 'yourfurnace', 'method'];
   let active = 'readme', pendingScroll = null;
-  const CUR_EPOCH = 'PT-1';   // the current model epoch (ST-1): a case on any other is drawn hollow and flagged for a re-walk
+  let CUR_EPOCH = 'AB-2';   // the current model epoch, READ from the base case (B) at every render (EP-FIX, 2026-11-05: was a literal 'PT-1' typed at ST-1 that flagged every case 'previous epoch' from the AB-2 landing on). A case whose tag differs from B's is drawn hollow and flagged for a re-walk
   let word = 'stored';   // 'sold' when transport and storage is below zero
 
   const deckRows = () => { const d = dash.data('deck'); return d.status === 'ok' ? d.data : null; };
@@ -3124,7 +3124,7 @@ window.dsPrice = function (c, p, k, inc) {
       const vals = [[codeOf(c), ''], [c.name + ' (' + c.id + ')' + (c.provisional ? ' · provisional' : ''), ''], [c.step, 'ds-hide-narrow'], [Number(c.o2pct).toFixed(2), 'n'], [(c.blastT != null ? Number(c.blastT).toFixed(0) : (c.hotBlast === false ? '250' : '1200')) + ' / ' + (c.moisture != null ? Number(c.moisture).toFixed(0) : '15'), 'n'], [Number(c.coke).toFixed(1), 'n'], [tco2(c.co2gross), 'n'],
         [tco2(o.emitted) + (o.stored ? ' (' + word + ')' : ''), 'n'], [usd(o.cost), 'n'], [c.id === ref.c.id ? 'reference' : sgn(o.cost - ref.cost), 'n'], [c.limit, 'ds-hide-narrow']];
       vals.forEach(([v, cls]) => { const td = tr.insertCell(); td.textContent = v; if (cls) td.className = cls; });
-      const td = tr.insertCell(); const pill = document.createElement('span'); pill.className = 'pill' + (c.epoch === CUR_EPOCH ? '' : ' old'); pill.textContent = c.epochNote; td.append(pill);
+      const td = tr.insertCell(); const pill = document.createElement('span'); pill.className = 'pill' + (c.epoch === CUR_EPOCH ? '' : ' old'); pill.textContent = String(c.epoch) + (c.epoch === CUR_EPOCH ? ' · current' : ' · previous'); pill.title = String(c.epochNote || ''); td.append(pill);
     });
     el('cases-table').replaceChildren(t);
   }
@@ -3229,7 +3229,7 @@ window.dsPrice = function (c, p, k, inc) {
         const th = t.tHead.rows[0].cells[fields.indexOf(f)];
         if (th.classList.contains('n')) td.className = th.className;
         else if (th.classList.contains('ds-hide-narrow')) td.className = 'ds-hide-narrow';
-        if (f === 'basis') { const s = document.createElement('span'); s.className = 'pill' + (v === 're-solved' ? '' : ' old'); s.textContent = v === 're-solved' ? 'Re-solved' : 'Captured, previous model version'; td.append(s); return; }
+        if (f === 'basis') { const cur = /^re-(solved|read)/.test(String(v || '')); const s = document.createElement('span'); s.className = 'pill' + (cur ? '' : ' old'); s.textContent = cur ? (/^re-solved/.test(String(v)) ? 'Re-solved' : 'Re-read at the case\'s current state') : 'Captured, previous model version'; s.title = String(v || ''); td.append(s); return; }
         if (v === null || v === undefined || v === '') { td.textContent = '—'; td.classList.add('na'); return; }
         td.textContent = f in DEC ? Number(v).toFixed(DEC[f]) : String(v);
       });
@@ -3263,7 +3263,7 @@ window.dsPrice = function (c, p, k, inc) {
         .on('mousemove', (ev) => tip.lines(ev, [['k', codeOf(r) + ' (' + r.id + ') · ' + r.name],
           ...parts.map(([key, label]) => ['', label + ': ' + Number(r[key]).toFixed(1) + ' % dry']),
           ['', 'H₂O: ' + Number(r.gas_H2O).toFixed(1) + ' % of the wet gas'], ['', 'LHV: ' + Number(r.gas_LHV).toFixed(2) + ' MJ/Nm³ wet'],
-          ...(r.basis === 're-solved' ? [] : [['k', 'Captured, previous model version']])]))
+          ...(/^re-(solved|read)/.test(String(r.basis || '')) ? [] : [['k', 'Captured, previous model version']])]))
         .on('mouseleave', () => tip.hide());
     });
     const lg = el('legend-gas'); lg.replaceChildren();
@@ -3922,6 +3922,7 @@ window.dsPrice = function (c, p, k, inc) {
       return;
     }
     const cases = cd.data, deck = dd.data;
+    CUR_EPOCH = ((cases.find((c) => c.id === 'B') || cases[0] || {}).epoch) || CUR_EPOCH;   // EP-FIX: the base case's tag IS the current epoch
     if (!built) buildSliders(deck);
     if (!capBuilt) buildCapital(capItems(), deck);
     const k = consts(deck), p = prices(deck), cap = capIncluded();
