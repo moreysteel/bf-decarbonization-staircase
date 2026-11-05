@@ -567,7 +567,7 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
     </section>
 
     <section class="ds-panel" role="tabpanel" id="yourfurnace" aria-labelledby="tab-yourfurnace" hidden>
-      <p class="ds-note" id="yourfurnace-intro">Your own furnace and one base operating period, beside the sample furnace. Every field starts as the sample furnace (the dashboard’s case B: PCI 100 kg at air blast, 6,500 t/d on a pellet burden), so change only what differs. As you type, the page (1) checks the numbers with conservation arithmetic only, no model physics: the iron balance, the carbon balance on the nitrogen tie (every N₂ in the top gas came in with the blast or the fuels, which sizes the dry gas), the oxygen balance with hydrogen, and the slag balance, each with the measurement it points at when it does not close; (2) prices the base period on the staircase at the prices on the Prices tab, from your own consumptions, with the CO₂ at the furnace gate from the carbon in; (3) draws the furnace to scale beside the sample furnace with its tuyeres, stockline and cooling zones; (4) takes the sizing and strength of every raw material on the test your plant reports (coke cold strength on ASTM, Micum, IRSID or JIS; CSR and CRI; the ferrous burden on the ISO tumble, compression, disintegration and reducibility tests; a mean size with the fines and oversize fractions for each; bulk densities) and shows them as the model’s own cells will take them, with the coke charge-volume fraction on your densities and the coke change the model’s measured slopes indicate; and (5) writes a file the model runner loads to solve your furnace at its own limits and walk it up the staircase. Nothing is sent anywhere: the entries stay in this page until you download the file or save them for yourself. Metric units; the model’s own cells are named in the record where a field maps to one.</p>
+      <p class="ds-note" id="yourfurnace-intro">Your own furnace and one base operating period, beside the sample furnace. Every field starts as the sample furnace (the dashboard’s case B: PCI 100 kg at air blast, 6,500 t/d on a pellet burden), so change only what differs. As you type, the page (1) checks the numbers with conservation arithmetic only, no model physics: the iron balance, the carbon balance on the nitrogen tie (every N₂ in the top gas came in with the blast or the fuels, which sizes the dry gas), the oxygen balance with hydrogen, and the slag balance, each with the measurement it points at when it does not close; (2) prices the base period on the staircase at the prices on the Prices tab, from your own consumptions, with the CO₂ at the furnace gate from the carbon in; (3) draws the furnace to scale beside the sample furnace with its tuyeres, stockline and cooling zones; (4) takes the sizing and strength of every raw material on the test your plant reports (coke cold strength on ASTM, Micum, IRSID or JIS; CSR and CRI; the ferrous burden on the ISO tumble, compression, disintegration and reducibility tests; a mean size with the fines and oversize fractions for each; bulk densities) and shows them as the model’s own cells will take them, with the coke charge-volume fraction on your densities and the coke change the model’s measured slopes indicate — and, since SS-2, what the ferrous tests do inside the solve: the fines charged plus the low-temperature degradation (RDI, LTD, decrepitation) and swelling above 18 % set a stack voidage that the stack pressure-drop index (the fifth index), the chimney map and the shaft efficiency read, and the blended reducibility index moves the gas’s approach to the wustite–iron equilibrium; and (5) writes a file the model runner loads to solve your furnace at its own limits and walk it up the staircase. Nothing is sent anywhere: the entries stay in this page until you download the file or save them for yourself. Metric units; the model’s own cells are named in the record where a field maps to one.</p>
       <section class="ds-card" id="yf-card">
         <div class="ds-row">
           <h2 id="yf-title">Your furnace</h2>
@@ -2482,6 +2482,38 @@ const YF_COKE_MAP = {
 };
 // the model's measured responses at the sample furnace, one lever at a time (CQ-2 probe 2026-11-02; UF-1 probe 2026-11-03), kg coke/tHM per unit
 const YF_SLOPES = { cri: 2.22 / 3, csr: -1.76 / 6, cokeSizeMM: -3.2 / 8 };
+// SS-2 (2026-11-05): the model's ore strength / reducibility chain (04_Level0_Raceway!A1012:D1056), replicated here so the
+// plant sees what its tests do before the runner solves. Levers = the model's placeholders; the reference = the sample furnace.
+// Slopes are the SS-2 probe at case B (results/ss2_probe_B.json): kg coke per RI point at the landed k_RI, and the open-loop
+// kg coke per unit of f_perm,ore.
+const YF_SS2 = { phi: 0.5, swellThreshold: 18, swellFinesPerPct: 1.0, finesVoid: 0.4, mOre: 1, kRI: 6.6, kgPerRI: -0.151 * 6.6, kgPerFperm: -220.8,
+  ref: { pellet: { fines: 3, lt: 85, swell: 15, ri: 70, eps: 0.36 }, sinter: { fines: 5, lt: 30, swell: 0, ri: 65, eps: 0.38 }, lump: { fines: 5, lt: 25, decrep: 5, swell: 0, ri: 55, eps: 0.40 } } };
+function yfStack(g) {
+  const L = YF_SS2, rows = [['pellet', 'pelletFines', 'pelletLTD', 'pelletSwell', 'pelletRI'], ['sinter', 'sinterFines', 'sinterRDI', null, 'sinterRI'], ['lump', 'lumpFines', 'lumpRDI', null, 'lumpRI']];
+  const rate = rows.reduce((a, [r]) => a + g(r), 0), o = { oreRate: rate };
+  // low-temperature degradation fines on the test basis: sinter RDI, pellet 100 - LTD, lump decrepitation + RDI
+  const lt = (r, v) => r === 'pellet' ? 100 - v : r === 'lump' ? v + g('lumpDecrep') : v;
+  const ltRef = (r) => r === 'pellet' ? 100 - L.ref.pellet.lt : r === 'lump' ? L.ref.lump.lt + L.ref.lump.decrep : L.ref.sinter.lt;
+  const chain = (fines, ltf, swell) => {
+    const excess = Math.max(0, swell - L.swellThreshold), swellKg = g('pellet') * excess * L.swellFinesPerPct / 100;
+    const xf = rate > 0 ? (fines + L.phi * (ltf + swellKg)) / rate : 0;
+    const epsLump = rate > 0 ? rows.reduce((a, [r]) => a + g(r) * L.ref[r].eps, 0) / rate : 0.4;
+    const swellVoid = rate > 0 ? L.phi * (1 - epsLump) * excess / 100 * g('pellet') / rate : 0;
+    return { excess, swellKg, xf, epsLump, eps: Math.max(0.2, epsLump - (1 - L.finesVoid) * (1 - epsLump) * xf / (1 - xf) - swellVoid) };
+  };
+  o.finesKg = rows.reduce((a, [r, f]) => a + g(r) * g(f) / 100, 0);
+  o.ltKg = rows.reduce((a, [r, , l]) => a + g(r) * lt(r, g(l)) / 100, 0);
+  const act = chain(o.finesKg, o.ltKg, g('pelletSwell'));
+  const ref = chain(rows.reduce((a, [r]) => a + g(r) * L.ref[r].fines / 100, 0), rows.reduce((a, [r]) => a + g(r) * ltRef(r) / 100, 0), L.ref.pellet.swell);
+  Object.assign(o, { swellExcess: act.excess, swellKg: act.swellKg, xf: act.xf, xfRef: ref.xf, epsLump: act.epsLump, eps: act.eps, epsRef: ref.eps });
+  o.ratio = ref.eps > 0 ? act.eps / ref.eps : 1;
+  o.fPermOre = Math.min(1.1, Math.max(0.8, Math.pow(o.ratio, L.mOre)));
+  o.ri = rate > 0 ? rows.reduce((a, [r, , , , k]) => a + g(r) * g(k), 0) / rate : 0;
+  o.riRef = rate > 0 ? rows.reduce((a, [r]) => a + g(r) * L.ref[r].ri, 0) / rate : 0;
+  o.dRI = o.ri - o.riRef; o.dT = -L.kRI * o.dRI;
+  o.slopeKg = { ri: L.kgPerRI == null ? null : o.dRI * L.kgPerRI, perm: L.kgPerFperm == null ? null : (o.fPermOre - 1) * L.kgPerFperm };
+  return o;
+}
 function yfMaterials(s) {
   const g = (k) => Number(s[k]) || 0;
   const m = { flags: [] };
@@ -2506,6 +2538,7 @@ function yfMaterials(s) {
   m.slopeKg = { cri: dCRI * YF_SLOPES.cri, csr: dCSR * YF_SLOPES.csr, size: dSize * YF_SLOPES.cokeSizeMM };
   m.slopeKgTotal = m.slopeKg.cri + m.slopeKg.csr + m.slopeKg.size;
   m.chimneyRatio = m.oreMeanModel > 0 ? 12 / m.oreMeanModel : 0;   // the chimney index scales as 1/d_ore (PB-2); the sample's pellet is 12 mm
+  m.ss2 = yfStack(g);   // SS-2: stack fines -> voidage ratio -> f_perm,ore; blended RI -> the equilibrium-approach offset (the model's own forms)
   // flags: literature-class bands, a warning where a plant's material sits outside them
   const w = (cond, text) => { if (cond) m.flags.push({ level: 'warn', text }); };
   w(g('cokeCSR') < 55, 'Coke CSR ' + g('cokeCSR') + ' % is below the 55 % most high-injection furnaces hold; the model’s fines chain will read a weaker bed.');
@@ -2519,6 +2552,8 @@ function yfMaterials(s) {
   w(g('sinter') > 0 && g('sinterTI') < 65, 'Sinter tumble index ' + g('sinterTI') + ' % is below 65 %.');
   w(g('lump') > 0 && g('lumpDecrep') > 10, 'Lump decrepitation ' + g('lumpDecrep') + ' % is above 10 %.');
   w(g('pci') > 0 && g('pciGrind') < 60 && g('pciGrind') > 45, 'Coal grind ' + g('pciGrind') + ' % −75 µm is between pulverized and granular practice; burnout falls with the coarser grind.');
+  w(m.ss2.ratio < 0.9, 'The stack voidage the model will read is ' + (100 * (1 - m.ss2.ratio)).toFixed(0) + ' % below the sample’s (fines ' + (100 * m.ss2.xf).toFixed(1) + ' % of the ore in the stack): the fifth index and the chimney map tighten, and r falls through f_perm,ore ' + m.ss2.fPermOre.toFixed(3) + '.');
+  w(m.ss2.fPermOre <= 0.8 || m.ss2.fPermOre >= 1.1, 'f_perm,ore sits on its clamp (' + m.ss2.fPermOre.toFixed(2) + '): the model stops responding to further fines or voidage change there.');
   w(m.oreFinesKg > 0.06 * oreRate && oreRate > 0, 'Ferrous fines under 6.3 mm total ' + m.oreFinesKg.toFixed(0) + ' kg/tHM (' + (100 * m.oreFinesKg / oreRate).toFixed(1) + ' % of the burden).');
   w(g('cokeVolMin') > 0 && m.cokeVolFrac < g('cokeVolMin'), 'The coke charge-volume fraction on your bulk densities is ' + m.cokeVolFrac.toFixed(2) + ', below the ' + g('cokeVolMin') + ' you entered as the trouble line.');
   return m;
@@ -2703,6 +2738,9 @@ function drawYourfurnaceInto(root, ctx) {
       ['Chimney index against the sample pellet (∝ 1/size, PB-2)', mt.chimneyRatio > 0 ? '× ' + f1(mt.chimneyRatio, 2) : '—'],
       ['Charge volumes on your bulk densities', f1(mt.cokeVol, 3) + ' m³ coke + ' + f1(mt.oreVol, 3) + ' m³ ore and flux per tHM'],
       ['Coke charge-volume fraction', f1(mt.cokeVolFrac, 3) + ' (trouble line entered: ' + f1(g('cokeVolMin'), 2) + ') · ore/coke ' + f1(mt.oreCokeMass, 2) + ' by mass'],
+      ['Stack fines the model will read (SS-2)', f1(100 * mt.ss2.xf, 1) + ' % of the ore (sample ' + f1(100 * mt.ss2.xfRef, 1) + ' %) = charged ' + f1(mt.ss2.finesKg, 0) + ' kg + ' + f1(YF_SS2.phi, 1) + ' × (degradation ' + f1(mt.ss2.ltKg, 0) + ' kg + swelling ' + f1(mt.ss2.swellKg, 0) + ' kg above ' + YF_SS2.swellThreshold + ' %)'],
+      ['Stack voidage ratio → chimney map and r (SS-2)', '× ' + f1(mt.ss2.ratio, 3) + ' (ε ' + f1(mt.ss2.eps, 3) + ' vs ' + f1(mt.ss2.epsRef, 3) + ') · f_perm,ore ' + f1(mt.ss2.fPermOre, 3) + (mt.ss2.slopeKg.perm == null ? '' : ' ≈ ' + sgn(mt.ss2.slopeKg.perm) + ' kg coke open-loop')],
+      ['Blended reducibility → equilibrium approach (SS-2)', 'RI ' + f1(mt.ss2.ri, 1) + ' % (sample ' + f1(mt.ss2.riRef, 1) + ') · offset ' + sgn(mt.ss2.dT) + ' °C on the W-point approach' + (mt.ss2.slopeKg.ri == null ? '' : ' ≈ ' + sgn(mt.ss2.slopeKg.ri) + ' kg coke at the probe slope')],
       ['Coke change the model’s measured slopes indicate, vs the sample coke', sgn(mt.slopeKgTotal) + ' kg/tHM (CRI ' + sgn(mt.slopeKg.cri) + ' · CSR ' + sgn(mt.slopeKg.csr) + ' · size ' + sgn(mt.slopeKg.size) + '; one lever at a time at the sample furnace, placeholder exponents, not a solve)']]
       .forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl3.append(dt, dd); });
     kv.append(dl3);
@@ -2734,7 +2772,11 @@ function drawYourfurnaceInto(root, ctx) {
         ore_mean_size_B126: mt.oreMeanModel, size_table_rows_113_118: { coke: Number(yfValue('cokeSize', yfState, sample)), sinter: Number(yfValue('sinterSize', yfState, sample)), pellet: Number(yfValue('pelletSize', yfState, sample)), lump: Number(yfValue('lumpSize', yfState, sample)), metallic: Number(yfValue('metallicSize', yfState, sample)), nut_coke: Number(yfValue('nutCokeSize', yfState, sample)) },
         bulk_density_t_m3: { coke_R108: Number(yfValue('cokeBulk', yfState, sample)), pellet_W6: Number(yfValue('pelletBulk', yfState, sample)), sinter_W5: Number(yfValue('sinterBulk', yfState, sample)), lump: Number(yfValue('lumpBulk', yfState, sample)), metallic: Number(yfValue('metallicBulk', yfState, sample)) },
         coke_charge_volume_fraction: mt.cokeVolFrac, coal_ash_fusion_AA88: Number(yfValue('pciAFT', yfState, sample)),
-        measured_slope_estimate_kg_coke: mt.slopeKg, note: 'cold-strength map and slope estimate are placeholders; the runner takes the entries and solves' },
+        ss2_burden_tests_T112_AA121: { pellet_115: { T_fines: Number(yfValue('pelletFines', yfState, sample)), U_TI: Number(yfValue('pelletTI', yfState, sample)), V_AI: Number(yfValue('pelletAI', yfState, sample)), W_LTD: Number(yfValue('pelletLTD', yfState, sample)), Y_RI: Number(yfValue('pelletRI', yfState, sample)), Z_swell: Number(yfValue('pelletSwell', yfState, sample)), AA_CCS: Number(yfValue('pelletCCS', yfState, sample)) },
+          sinter_114: { T_fines: Number(yfValue('sinterFines', yfState, sample)), U_TI: Number(yfValue('sinterTI', yfState, sample)), W_RDI: Number(yfValue('sinterRDI', yfState, sample)), Y_RI: Number(yfValue('sinterRI', yfState, sample)) },
+          lump_116: { T_fines: Number(yfValue('lumpFines', yfState, sample)), U_TI: Number(yfValue('lumpTI', yfState, sample)), W_RDI: Number(yfValue('lumpRDI', yfState, sample)), X_decrep: Number(yfValue('lumpDecrep', yfState, sample)), Y_RI: Number(yfValue('lumpRI', yfState, sample)) },
+          chain_preview: { stack_fines_frac: mt.ss2.xf, stack_voidage_ratio_B1026: mt.ss2.ratio, f_perm_ore_B1027: mt.ss2.fPermOre, blended_RI_B1042: mt.ss2.ri, approach_offset_C_B1045: mt.ss2.dT } },
+        measured_slope_estimate_kg_coke: Object.assign({}, mt.slopeKg, { ss2_reducibility: mt.ss2.slopeKg.ri, ss2_stack_permeability_open_loop: mt.ss2.slopeKg.perm }), note: 'cold-strength map and slope estimate are placeholders; the runner takes the entries and solves' },
       checks: { iron: { in: r.feIn, out: r.feOut, residual_pct: r.feResidualPct }, carbon: { in: r.cIn, out: r.cOut, residual_pct: r.cResidualPct, dry_gas_nm3_thm: r.vDry }, oxygen: { in: r.oIn, out: r.oOut, residual_pct: r.oResidualPct }, slag: { in: r.gangueIn, out: r.slagOx, residual_pct: r.slagResidualPct }, flags: r.flags.map((f) => f.text) },
       derived: { fuel_rate: r.fuelRate, eta_co: r.etaCO, eta_h2: r.etaH2, wind_nm3_thm: r.windTHM, purchased_o2_kg_thm: r.purchO2kg, tuyere_velocity_m_s: r.tuyereVelocity, ke_per_tuyere_kw: r.kePerTuyere, co2_gross_t_thm: r.co2gross, top_gas_mj_thm: r.topGasMJ, profile_volume_m3: r.profileVol },
       prices: ctx.p };
