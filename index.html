@@ -572,7 +572,7 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
     </section>
 
     <section class="ds-panel" role="tabpanel" id="inside" aria-labelledby="tab-inside" hidden>
-      <p class="ds-note" id="inside-intro">How the model manages its critical areas, one item at a time: what question each area answers, how the model handles it, what the rest of the model takes from it, what it does not do, and the live numbers for the case picked above. Every figure on this tab is a cell of the model read at the case’s converged point, with its address beside it, so a specialist can open the workbook at the same place. Item 1: gas flow across the radius, the 8-band solve. Item 2: how the direct and indirect reduction are split on the extended operating line, and the burden distribution the model backs into through the shaft efficiency r. More items follow as they are ruled.</p>
+      <p class="ds-note" id="inside-intro">How the model manages its critical areas, one item at a time: what question each area answers, how the model handles it, what the rest of the model takes from it, what it does not do, and the live numbers for the case picked above. Every figure on this tab is a cell of the model read at the case’s converged point, with its address beside it, so a specialist can open the workbook at the same place. Item 1: gas flow across the radius, the 8-band solve. Item 2: how the direct and indirect reduction are split on the extended operating line, and the burden distribution the model backs into through the shaft efficiency r. Item 3: where the cohesive zone sits and what shape it has, read off the countercurrent slice’s thermal field. More items follow as they are ruled.</p>
       <section class="ds-card" id="inside-card">
         <div class="ds-row">
           <h2 id="inside-title">Inside the model</h2>
@@ -584,7 +584,7 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
         </div>
         <div class="ds-legend" id="legend-inside"></div>
         <div class="ds-tablewrap" id="inside-table"></div>
-        <p class="ds-feed-note">Rows: stair/out/staircase_inside.json from model/inside_reread.py — the radial sheets 04_Radial_8Band and 04_Radial_Ergun, the lower-zone readouts, the extended operating line 05_Operating_Line, the solver’s r-applied block (06_Cameron_Matrix!AJ1557:AJ1580), the live reduction chain (04_RAZ_Model) and the fines and reducibility hooks on r (04_Level0_Raceway rows 977–1047), re-read at each case’s saved state with the blocks gated (the twin computes only what is gated, so a raw state holds the archive’s values for them). The profile levers, the particle sizes, the bed voidages and the cohesive-zone weight are the model’s inputs; the base figures the two factors divide by are the frozen 2026-07-11 anchors the record names.</p>
+        <p class="ds-feed-note">Rows: stair/out/staircase_inside.json from model/inside_reread.py — the radial sheets 04_Radial_8Band and 04_Radial_Ergun, the lower-zone readouts, the extended operating line 05_Operating_Line, the solver’s r-applied block (06_Cameron_Matrix!AJ1557:AJ1580), the live reduction chain (04_RAZ_Model) and the fines and reducibility hooks on r (04_Level0_Raceway rows 977–1047), re-read at each case’s saved state with the blocks gated; item 3 reads the Furnace dataset’s thermal field (04_Slice_Countercurrent rows 58–153 per case, stair/make_furnace.py) (the twin computes only what is gated, so a raw state holds the archive’s values for them). The profile levers, the particle sizes, the bed voidages and the cohesive-zone weight are the model’s inputs; the base figures the two factors divide by are the frozen 2026-07-11 anchors the record names.</p>
       </section>
     </section>
 
@@ -2325,12 +2325,15 @@ window.drawEfficiencyInto = drawEfficiencyInto;
 // the case's converged state (stair/make_inside.py from model/inside_reread.py). Item 1: the 8-band radial gas-flow solve.
 // Item 2 (IM-2, 2026-11-06): the direct / indirect reduction split on the extended operating line, and the burden distribution
 // the model backs into through the shaft efficiency r.
-function drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, tableBox, allRows) {
+// Item 3 (IM-3, 2026-11-06): the cohesive zone's location and shape -- the countercurrent slice's thermal field (the Furnace tab's
+// row, passed in as fzRows), the fusion and melting lines read off it, and the rules that draw them.
+function drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, tableBox, allRows, fzRows) {
   const fmt = (v, d = 0, u = '') => (v == null || !isFinite(v) ? '—' : Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + u);
   const pct = (v, d = 1) => (v == null || !isFinite(v) ? '—' : (100 * v).toFixed(d) + ' %');
   const code = (x) => (typeof dsCode === 'function' ? dsCode(x) : (x.code || x.id));
   const ITEMS = [{ id: 'radial', n: 1, title: 'Gas flow across the radius: the 8-band solve', draw: drawRadial },
-    { id: 'reduction', n: 2, title: 'Direct and indirect reduction: the operating line, and the burden distribution behind it', draw: drawReduction }];
+    { id: 'reduction', n: 2, title: 'Direct and indirect reduction: the operating line, and the burden distribution behind it', draw: drawReduction },
+    { id: 'cz', n: 3, title: 'The cohesive zone: where the model puts it, and the shape it gives it', draw: drawCZ }];
   let item = 'radial';
   try { const s = JSON.parse(localStorage.getItem('ds-inside') || 'null'); if (s && ITEMS.some((i) => i.id === s.item)) item = s.item; } catch (e) {}
   const save = () => { try { localStorage.setItem('ds-inside', JSON.stringify({ item })); } catch (e) {} };
@@ -2339,7 +2342,7 @@ function drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, t
   // the item index (one button per item; more items are added as they land)
   const nav = document.createElement('div'); nav.className = 'ds-ctl'; nav.setAttribute('role', 'group'); nav.setAttribute('aria-label', 'Item');
   const lab = document.createElement('span'); lab.className = 'ds-ctl-label'; lab.textContent = 'Critical area'; nav.append(lab);
-  ITEMS.forEach((it) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ds-btn'; b.textContent = it.n + ' · ' + it.title; b.setAttribute('aria-pressed', String(it.id === item)); b.addEventListener('click', () => { item = it.id; save(); drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, tableBox, allRows); }); nav.append(b); });
+  ITEMS.forEach((it) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ds-btn'; b.textContent = it.n + ' · ' + it.title; b.setAttribute('aria-pressed', String(it.id === item)); b.addEventListener('click', () => { item = it.id; save(); drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, tableBox, allRows, fzRows); }); nav.append(b); });
   box.append(nav);
 
   // ---------- helpers for the prose ----------
@@ -2635,6 +2638,181 @@ function drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, t
       pt(1, yd1, dash.colors[1], false, 'r = 1: ' + fmt(DRR1, 1) + ' %', [['k', 'If the gas reached equilibrium (r = 1)'], ['', 'y_d = ' + fmt(yd1, 4) + ' → DRR ' + fmt(DRR1, 2) + ' %'], ['', 'the line through W with the same μ and the same oxidizer booking']], -8, 16, 'end');
       pt(0, Ln.YE, dash.colors[0], true, 'Y_E = ' + fmt(Ln.YE, 3), [['k', 'The intercept Y_E'], ['', fmt(Ln.YE, 4) + ' = Y_R − X_R μ'], ['', 'slope μ = ' + fmt(Ln.mu, 4) + ' mol gas per mol Fe']], 8, -8);
       svg.append('text').attr('x', x(Ln.XR / 2) + 10).attr('y', y((Ln.YE + Ln.YR) / 2) + 14).attr('font-size', 9.5).style('fill', 'var(--color-fg-muted)').text('slope μ = ' + fmt(Ln.mu, 3) + ' mol gas per mol Fe');
+    }
+  }
+
+  // ===================== Item 3: the cohesive zone =====================
+  function drawCZ() {
+    const fz = (fzRows || []).find((r) => r.id === c.id);
+    if (!fz || !fz.field || !fz.isotherms) { section('', ['No thermal field for this case on the Furnace dataset.']); return; }
+    const G = fz.geometry, FD = fz.field, ISO = fz.isotherms, Lt = fz.latent || {}, St = fz.field_settle || {};
+    const LtRef = Lt.fusion_MJ != null ? Lt : ((((fzRows || []).find((r) => r.latent && r.latent.fusion_MJ != null) || {}).latent) || {});   // the latent magnitudes (the same levers at every case) for the captured-field rows
+    const Z = FD.z, NB = FD.Ts.length, NS = Z.length;
+    const Rof = (z) => { const hR = G.hearth_R, bR = G.belly_R, tR = G.throat_R; if (z <= 0) return hR; if (z <= G.bosh_top) return hR + (bR - hR) * z / G.bosh_top; if (z <= G.belly_top) return bR; if (z <= G.throat_bottom) return bR - (bR - tR) * (z - G.belly_top) / (G.throat_bottom - G.belly_top); return tR; };
+    const edges = c.radial && c.radial.bands ? c.radial.bands.map((bd) => [bd.rIn, bd.rOut]) : Array.from({ length: NB }, (_, i) => [i / NB, (i + 1) / NB]);
+    const bandZ = (line, kb) => line[9 - kb][1];                 // a 19-point line: wall, bands 8..1, centre (band 1), bands 1..8, wall
+    const axis = (pts) => { if (!pts || pts.length < 5) return pts; const m = (pts.length - 1) / 2; if (!Number.isInteger(m) || Math.abs(pts[m][0]) > 1e-6) return pts; const zc = pts[m - 2][1]; return pts.filter((pp, i) => i !== m - 1 && i !== m + 1).map((pp, i, a) => (i === (a.length - 1) / 2 ? [0, zc] : pp)); };
+    const melt = ISO.melt, fus = ISO.fusion;
+    const h = { fusC1: bandZ(fus, 1), meltC1: bandZ(melt, 1), fusC: bandZ(fus, 2), meltC: bandZ(melt, 2), fusW: bandZ(fus, 8), meltW: bandZ(melt, 8) };
+    const meltByBand = Array.from({ length: NB }, (_, i) => bandZ(melt, i + 1)), fusByBand = Array.from({ length: NB }, (_, i) => bandZ(fus, i + 1));
+    const sgn = (v, d = 2, u = '') => (v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : '') + fmt(v, d, u));
+    const apexIdx = meltByBand.slice(1).reduce((best, z, i) => (z > meltByBand[best] ? i + 1 : best), 1), apexBand = apexIdx + 1;   // bands 2..8 (band 1 is the drawn-over centre)
+    const dz = h.meltC - h.meltW;
+    const shape = dz > 0.3 ? 'inverted V (centre-high)' : dz < -0.3 ? 'centre-dipped (W)' : 'flat';
+    const refB = allRows.find((r) => r.id === 'B'), fzB = (fzRows || []).find((r) => r.id === 'B');
+    const charged = Lt.fusion_charged_total != null ? Lt.fusion_charged_total : null;
+    const fallback = Array.isArray(Lt.fallback) ? Lt.fallback.map((v, i) => (v ? i + 1 : null)).filter((v) => v) : [];
+    const above = Array.isArray(Lt.solid_above_gas_K) ? Math.max(...Lt.solid_above_gas_K.flat(2)) : null;
+    const epochShort = String(fz.field_epoch || '').split(' (')[0];
+    const trz = fz.shaft || {};
+
+    section('What question it answers', [
+      ['Somewhere between the thermal reserve zone and the tuyeres the ore stops being a bed of lumps: it softens (the model takes ', b('1150 °C'), '), slumps into near-impermeable layers that the gas can only pass through the coke slits between them, and finally melts and drips (', b('1450 °C'), '). That band of half-molten ore is the ', b('cohesive zone'), '. Where it sits sets how much stack is left above it for the gas to reduce the ore — a high zone is a short shaft — and its shape says where the gas is going: a zone peaked at the centre (an inverted V) is a centre-working furnace whose coke-rich axis carries the gas; a flat or centre-dipped zone (a W) is an ore-heavy, gas-starved centre. The model has no sensor in the furnace; it places the zone where its own thermal field crosses the two temperatures, band by band across the radius.'],
+    ]);
+    section('The thermal field: the countercurrent slice', [
+      ['The furnace above the raceways is gridded into ' + NB + ' radial bands (item 1’s rings, the same areas) and ' + NS + ' axial slices of 2 m, from the bosh at ' + fmt(Z[0], 0) + ' m above the tuyeres to the throat at ' + fmt(Z[NS - 1], 0) + ' m (', cell('04_Slice_Countercurrent!A58:CL153'), '; the stockline is at ' + fmt(G.stockline, 0) + ' m). Gas goes up, solids come down, and in every cell the two exchange heat: the gas and solid mass through each band come from item 1’s split (rows 45–52 of the sheet), the exchange coefficient from a Ranz–Marshall Nusselt number on the local Reynolds and Prandtl numbers, and each cell is an implicit two-stream stage, UA·ΔT ∕ (1 + UA(1/C_gas + 1/C_solid)), swept twice with a relaxation of 0.7 (', cell('B34'), '). The gas enters at the bosh at the Level-0 handoff temperature (', cell('B8'), ') and the charge enters at the top at 25 °C (', cell('B24'), '); the reaction heat of reduction, a wall loss on the outer band, the drying load at the top slices and a radial blend of the gas toward the slice mean (β = 0.3, ', cell('B46'), ') sit on top of the exchange.'],
+      ['What makes the field a cohesive zone is the ', b('fusion window'), ': the softening-and-melting heat of the burden — ' + fmt(LtRef.fusion_MJ, 0) + ' MJ/tHM (', cell('B254'), ' ← ', cell('04_Level0_Raceway!B541'), ', the per-material fusion basis) — is charged to the solid in the slices where its temperature sits between 1150 and 1450 °C, with 100 K ramps at both ends (', cell('DP58:DP153'), ' → the sink ', cell('DR58:DR153'), '), each band carrying its own share. The calcining heat of the flux (' + fmt(LtRef.calcining_MJ, 0) + ' MJ/tHM, ', cell('B255'), ') is charged the same way over 600–950 °C. A solid crossing the window therefore stalls there — the plateau the melting zone is — and where a band’s solid steps clean over the window between two slice centres the heat follows the crossing instead (the FU-1 rule, switch ', cell('B258'), '). The sink is relaxed between passes at λ = 0.2 (', cell('B256'), ', SL-1) so the zone settles to a fixed point instead of migrating between slices.'],
+    ]);
+    section('From the field to the lines on the drawing', [
+      ['The isotherms the Furnace tab draws are read off the solid temperatures: in each band, the height where the descending solid first reaches 1150 °C is the fusion line and where it reaches 1450 °C the melting line — the highest crossing of the band’s profile, interpolated between slice centres; above the top slice the crossing is taken toward the 25 °C charge at the stockline, below the bottom slice toward the energy-balanced flame temperature at the raceway crown (' + fmt(fz.raft, 0) + ' °C, ', cell('04_Level0_Raceway!B189'), '). Each line is nineteen points — the wall, the eight bands, the centre and back — at the band’s radius on the furnace profile at that height, and the cohesive zone is the region between the two (', cell('stair/make_furnace.py'), ' builds them from the slice’s field; the sheet carries the field, not the lines).'],
+      ['One drawing rule: the innermost band (band 1, a 0.5 m radius, 0.4 % of the area) comes out cooler than band 2 through the zone at every ordinary case — its solid runs hotter than its own gas up the stack, a construction artifact of blending the gas toward the slice mean while the solid is exchanged against the local gas — so the drawing carries band 2 to the axis and reports band 1’s own value beside it (the centre-notch rule of 2026-10-16). For this case the melting line sits at ' + fmt(h.meltC, 1) + ' m at the centre as drawn (band 1’s own value ' + fmt(h.meltC1, 1) + ') and ' + fmt(h.meltW, 1) + ' m at the wall; the fusion line at ' + fmt(h.fusC, 1) + ' and ' + fmt(h.fusW, 1) + ' m. The zone is ' + fmt(h.fusC - h.meltC, 1) + ' m thick at the centre and ' + fmt(h.fusW - h.meltW, 1) + ' m at the wall, its apex is band ' + apexBand + ' (' + (c.radial && c.radial.bands[apexIdx] ? c.radial.bands[apexIdx].name : '') + '), and its shape reads ', b(shape), ' (centre melting line ' + sgn(dz, 1) + ' m against the wall).'],
+    ]);
+    const chartBox = document.createElement('div'); chartBox.className = 'ds-im-chart'; box.append(chartBox);
+    drawSection(chartBox);
+    const chartBox2 = document.createElement('div'); chartBox2.className = 'ds-im-chart'; box.append(chartBox2);
+    drawProfiles(chartBox2);
+    section('What the rest of the model takes from it', [
+      ['The Furnace tab draws the field, the isotherms and the zone, and the burden layers thinning to nothing across it; the Raceway tab draws the zone’s root where the melting line meets the bosh; the Furnace forces tab reads the melting line as the top of the active coke zone. The outer bands’ bosh gas (bands 7 and 8) is what the coke descends through on its way to the raceway, and it seeds the coke’s raceway inlet temperature and so the flame (CT-1; a typed seed with a drift witness, because nothing between the slice and the flame loop is live). The flow-weighted top gas of the slice is the live-map T_top (', cell('04_Slice_Countercurrent!D166'), '), floored at 107 °C on the outer bands — a report row beside the solver’s own top gas since the T_top rulings.'],
+      [b('What it does not reach: the coke rate.'), ' Nothing in the 25 × 25 conservation solve reads the slice (across passes in which the wall band moved 100 K, coke moved less than a nanogram). The zone’s height does not change how much ore is reduced by gas; that comes from item 2’s shaft efficiency r. A real furnace couples the two — a zone that climbs into the stack shortens the shaft and costs indirect reduction — and the model carries that coupling only through r, not through the field. The slice model that feeds hot-metal silicon (', cell('04_Slice_Model!B198:B199'), ', the cohesive slices of an older 8-slice grid on a typed temperature profile) is a second, coarser instrument of the same zone; it is where the case-E cycle lived, and it is now seeded (SZ-1).'],
+    ]);
+    section('What it does not do', [
+      'The window is two typed temperatures with 100 K ramps: the burden’s softening and melting are not computed from its composition (slag chemistry, basicity, FeO), so a pellet and a sinter melt at the same temperatures here — the plant’s softening–melting tests (§12 #7) replace them. The bands exchange heat only through the gas blend: there is no radial conduction, no solids flow, no layered structure inside the zone beyond the coke-slit permeability of item 1. At the two recycle states (L and M) the outer bands’ bottom-slice solid sits on the window’s 1150 °C edge, where the window rule switches a band’s whole melting heat on and off between passes: plain sweeps cycle there (RS-1), the accelerated solve reports a fixed point inside the cycle band, and the field is drawn from that one state — at L the wall band charges none of its melting heat on it, so the grid carries 76 % of the total. A fusion allocation continuous in the front position (the heat charged by how far the solid gets through the window, slice by slice) would remove the switch; it is an open ruling. The gas floor and the two-sweep construction of the slice (SL-0 findings 1 and 2) are open items; the slice is a diagnostic layer, judged, never driving the solve.',
+      'The plant questions: the softening and melting temperatures of your burden; your cohesive-zone probes, if any (the shaft tuyere, the vertical probe, the top-gas temperature profile) and the shape they show; and the top-gas temperature across the radius, which is where this field can be checked against something measured.',
+    ]);
+
+    kv('The slice’s frame', [
+      ['Grid', NB + ' bands × ' + NS + ' slices of 2 m, ' + fmt(Z[0], 0) + '–' + fmt(Z[NS - 1], 0) + ' m', '04_Slice_Countercurrent!A58:CL153 (gas up, solids down)'],
+      ['Gas at the bosh slice · charge in', fmt(FD.Tg[7][0], 0) + ' °C (wall band, slice 1; centre ' + fmt(FD.Tg[0][0], 0) + ') · 25 °C', 'CK (after exchange); the inlet is B8, the Level-0 handoff · B24'],
+      ['Fusion window · ramps', '1150–1450 °C · 100 K', 'DP58:DP153 (on the solid CL)'],
+      ['Melting heat · calcining', fmt(LtRef.fusion_MJ, 0) + ' · ' + fmt(LtRef.calcining_MJ, 0) + ' MJ/tHM', 'B254 ← 04_Level0_Raceway!B541 · B255'],
+      ['Sink relaxation λ · blend β · ω', '0.2 · 0.3 · 0.7', 'B256 (SL-1) · B46 · B34'],
+      ['Top-gas floor', '107 °C', 'B253 ← 03_Model_Settings!C15 (per cell, per sweep)'],
+      ['Flame at the crown (extrapolation)', fmt(fz.raft, 0) + ' °C', '04_Level0_Raceway!B189 (energy-balanced); witness ' + fmt(fz.flame_witness, 0)],
+    ]);
+    kv('Where it sits', [
+      ['Melting line, centre (drawn) · wall', fmt(h.meltC, 2) + ' · ' + fmt(h.meltW, 2) + ' m', 'band 2 carried to the axis; band 1’s own value ' + fmt(h.meltC1, 2) + ' m'],
+      ['Fusion line, centre (drawn) · wall', fmt(h.fusC, 2) + ' · ' + fmt(h.fusW, 2) + ' m', 'band 1’s own value ' + fmt(h.fusC1, 2) + ' m'],
+      ['Thickness, centre · wall', fmt(h.fusC - h.meltC, 2) + ' · ' + fmt(h.fusW - h.meltW, 2) + ' m', 'fusion − melting'],
+      ['Apex · shape', 'band ' + apexBand + ' · ' + shape, 'centre vs wall melting line ' + sgn(dz, 2) + ' m'],
+      ['Root above the bosh bend', sgn(h.meltW - G.bosh_top, 2) + ' m', 'wall melting line − bosh top (' + fmt(G.bosh_top, 0) + ' m)'],
+      ['Thermal reserve zone level', (trz.trz_level_wall_m != null ? fmt(trz.trz_level_wall_m, 1) + ' (wall) · ' + fmt(trz.trz_level_mid_m, 1) + ' (mid) m' : '—'), 'the ' + fmt(trz.trz_C, 0) + ' °C crossing' + (trz.enabled ? ' · shaft injection ON' : '')],
+      ['CZ-top slice per band', (FD.cz_top_slice || []).map((v) => fmt(v, 0)).join(' · '), 'CU58:CU153 (bands 1 → 8)'],
+    ]);
+    kv('The field’s standing', [
+      ['Epoch', epochShort, String(fz.field_epoch || '').includes('(') ? String(fz.field_epoch).split('(')[1].replace(/\)$/, '') : ''],
+      ['Settle', St.method ? (St.stationary ? 'stationary' : 'NOT stationary') + ' · ' + (St.passes != null ? St.passes + ' passes' : '') + (St.last_move_K != null ? ' · last move ' + fmt(St.last_move_K, 4) + ' K' : '') : 'captured field (no twin settle)', St.method || ''],
+      ['Melting heat charged in the grid', charged != null ? fmt(100 * charged, 1) + ' %' : '— (captured field)', fallback.length ? 'FU-1 crossing rule on band' + (fallback.length > 1 ? 's ' : ' ') + fallback.join(', ') : (Array.isArray(Lt.fusion_charged) && Lt.fusion_charged.some((v) => v < 0.5) ? 'band' + (Lt.fusion_charged.filter((v) => v < 0.5).length > 1 ? 's ' : ' ') + Lt.fusion_charged.map((v, i) => (v < 0.5 ? i + 1 : null)).filter((v) => v).join(', ') + ' charged nothing on this pass (the window edge)' : 'window rule on every band')],
+      ['Solid above its gas, max', above != null ? fmt(above, 0) + ' K' : '—', 'rows 259–262 (the centre-band artifact)'],
+      ['Field coke · case coke', fmt(fz.field_coke, 2) + ' · ' + fmt(fz.coke, 2) + ' kg/tHM', 'the solve the field was read at vs the captured'],
+      ['Top gas: live map · solver', fmt(fz.ttop_map, 1) + ' · ' + fmt(fz.ttop_solver, 1) + ' °C', 'D166 · 06_Cameron_Matrix!AE1546'],
+    ]);
+    if (fzB && c.id !== 'B') { const hb = { meltC: bandZ(fzB.isotherms.melt, 2), meltW: bandZ(fzB.isotherms.melt, 8), fusC: bandZ(fzB.isotherms.fusion, 2), fusW: bandZ(fzB.isotherms.fusion, 8) }; kv('Against PCI-100 (B)', [
+      ['Melting line centre · wall', fmt(h.meltC, 1) + ' · ' + fmt(h.meltW, 1) + ' vs ' + fmt(hb.meltC, 1) + ' · ' + fmt(hb.meltW, 1) + ' m', ''],
+      ['Fusion line centre · wall', fmt(h.fusC, 1) + ' · ' + fmt(h.fusW, 1) + ' vs ' + fmt(hb.fusC, 1) + ' · ' + fmt(hb.fusW, 1) + ' m', ''],
+      ['Thickness at the centre', fmt(h.fusC - h.meltC, 1) + ' vs ' + fmt(hb.fusC - hb.meltC, 1) + ' m', ''],
+    ]); }
+
+    // ---- the per-case table ----
+    const t = document.createElement('table');
+    const head = ['Case', 'Melt, centre m', 'Melt, wall m', 'Fusion, centre m', 'Fusion, wall m', 'Thick. centre m', 'Thick. wall m', 'Apex band', 'Shape', 'Heat charged %', 'Epoch', 'Settle'];
+    const hr = t.createTHead().insertRow(); head.forEach((hh, i) => { const th = document.createElement('th'); th.textContent = hh; if (i && i < 8) th.className = 'n'; hr.append(th); });
+    const tb = t.createTBody();
+    allRows.slice().sort((a, bb) => a.order - bb.order).forEach((r) => {
+      const f = (fzRows || []).find((x) => x.id === r.id); if (!f || !f.isotherms) return;
+      const mB = Array.from({ length: NB }, (_, i) => bandZ(f.isotherms.melt, i + 1)), fB = Array.from({ length: NB }, (_, i) => bandZ(f.isotherms.fusion, i + 1));
+      const ap = mB.slice(1).reduce((best, z, i) => (z > mB[best] ? i + 1 : best), 1); const d = mB[1] - mB[7];
+      const sh = d > 0.3 ? 'inverted V' : d < -0.3 ? 'W' : 'flat';
+      const lt = f.latent || {}, st = f.field_settle || {};
+      const tr = tb.insertRow(); if (r.id === c.id) tr.className = 'sel';
+      [code(r), fmt(mB[1], 2), fmt(mB[7], 2), fmt(fB[1], 2), fmt(fB[7], 2), fmt(fB[1] - mB[1], 2), fmt(fB[7] - mB[7], 2), String(ap + 1), sh, lt.fusion_charged_total != null ? fmt(100 * lt.fusion_charged_total, 1) : '—', String(f.field_epoch || '').split(' (')[0], st.method ? (st.stationary ? 'stationary' : 'not stationary') : 'captured']
+        .forEach((v, i) => { const td = tr.insertCell(); td.textContent = v; if (i && i < 8) td.className = 'n'; });
+    });
+    tableBox.append(t);
+    const note = document.createElement('p'); note.className = 'ds-feed-note'; note.textContent = 'Every case on the Furnace dataset’s field. Centre = band 2 carried to the axis (the drawing rule; band 1’s own value is in the side panel). Melting line = the solid’s highest 1450 °C crossing per band; fusion = 1150 °C. Apex = the band with the highest melting line among bands 2–8; shape by the centre-vs-wall melting line (±0.3 m = flat). Heat charged = the share of the fusion latent the grid charged (FU-1 readout). Epoch: PT-1 + FU-1 = re-solved in the twin at the case’s point with the crossing rule; A432 = the captured field kept (no band skipped the window there). Settle = whether the twin’s accelerated solve reached a fixed point; at L and M the plain sweeps cycle on the window’s edge (RS-1) and the field is one state of that cycle.'; tableBox.append(note);
+
+    legend.replaceChildren();
+    [[dash.colors[0], 'Melting line (1450 °C)'], [dash.colors[1], 'Fusion line (1150 °C)'], ['var(--bf-cz, ' + dash.colors[4] + ')', 'Cohesive zone (between them)'], ['var(--color-fg-muted)', 'Solid temperature field, band × slice (hover)']].forEach(([col, name]) => {
+      const sp = document.createElement('span'); const sw = document.createElement('i'); sw.style.background = col; sp.append(sw, name); legend.append(sp);
+    });
+
+    function drawSection(host) {
+      const W = Math.max(320, host.clientWidth || box.clientWidth || 720), H = 420, m = { t: 16, r: 16, b: 30, l: 44 };
+      host.style.minHeight = H + 'px';
+      const svg = d3.select(host).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', 'The solid temperature field with the fusion and melting lines and the cohesive zone');
+      const zMin = 0, zMax = G.stockline + 1;
+      const xr = Math.max(G.belly_R, G.hearth_R) + 0.5;
+      const y = d3.scaleLinear([zMin, zMax], [H - m.b, m.t]);
+      const pxPerM = (y(0) - y(zMax)) / zMax;
+      const cx = m.l + (W - m.l - m.r) / 2;
+      const x = (r) => cx + r * pxPerM;
+      const tip = tooltip(host);
+      const ay = svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(8).tickSizeOuter(0));
+      ay.attr('font-size', null).attr('font-family', null); ay.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 10); ay.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
+      svg.append('text').attr('x', m.l + 4).attr('y', m.t - 4).attr('font-size', 10).style('fill', 'var(--color-fg-muted)').text('height above the tuyeres, m');
+      const col = d3.scaleSequential([0, 1800], d3.interpolateRgbBasis(['#e8eef5', '#f2c26b', '#d8632a', '#7a1f1f']));
+      const cells = svg.append('g');
+      for (let bI = 0; bI < NB; bI++) for (let j = 0; j < NS; j++) {
+        const z0 = Z[j] - 1, z1 = Z[j] + 1, zc = Z[j];
+        const R0 = Rof(z0), R1 = Rof(z1);
+        [1, -1].forEach((sg) => {
+          const pts = [[sg * edges[bI][0] * R0, z0], [sg * edges[bI][1] * R0, z0], [sg * edges[bI][1] * R1, z1], [sg * edges[bI][0] * R1, z1]];
+          cells.append('path').attr('d', 'M' + pts.map((q) => x(q[0]) + ',' + y(q[1])).join('L') + 'Z').style('fill', col(FD.Ts[bI][j])).attr('opacity', 0.82).attr('stroke', 'var(--color-bg)').attr('stroke-width', 0.4)
+            .on('mousemove', (ev) => tip.lines(ev, [['k', (c.radial && c.radial.bands[bI] ? c.radial.bands[bI].name : 'band ' + (bI + 1)) + ' · slice ' + (j + 1) + ' (' + fmt(zc, 0) + ' m)'], ['', 'solid ' + fmt(FD.Ts[bI][j], 0) + ' °C · gas ' + fmt(FD.Tg[bI][j], 0) + ' °C'], ['', 'fusion-window weight ' + fmt(FD.DP[bI][j], 2) + (FD.inCZ && FD.inCZ[bI][j] ? ' · in the cohesive zone' : '')], ['', 'CL' + (58 + bI * 12 + j) + ' · CK' + (58 + bI * 12 + j)]])).on('mouseleave', () => tip.hide());
+        });
+      }
+      // the shell
+      svg.append('path').attr('d', 'M' + G.shell.map((q) => x(q[0]) + ',' + y(q[1])).join('L') + 'Z').style('fill', 'none').style('stroke', 'var(--color-fg)').attr('stroke-width', 1.5);
+      // stockline and tuyere level
+      [[G.stockline, 'stockline'], [0, 'tuyeres']].forEach(([zz, lab]) => { svg.append('line').attr('x1', x(-xr)).attr('x2', x(xr)).attr('y1', y(zz)).attr('y2', y(zz)).style('stroke', 'var(--cds-chart-reference)').attr('stroke-dasharray', '3 3'); svg.append('text').attr('x', x(xr)).attr('y', y(zz) - 3).attr('text-anchor', 'end').attr('font-size', 9.5).style('fill', 'var(--color-fg-muted)').text(lab); });
+      const line = d3.line().x((q) => x(q[0])).y((q) => y(q[1]));
+      const mA = axis(melt), fA = axis(fus);
+      svg.append('path').attr('d', line(fA.concat(mA.slice().reverse())) + 'Z').style('fill', 'var(--color-bg)').attr('opacity', 0.45);
+      svg.append('path').attr('d', line(fA.concat(mA.slice().reverse())) + 'Z').style('fill', 'var(--bf-cz, ' + dash.colors[4] + ')').attr('opacity', 0.45);
+      [[mA, dash.colors[0]], [fA, dash.colors[1]]].forEach(([ln, colr]) => { svg.append('path').attr('d', line(ln)).style('fill', 'none').style('stroke', 'var(--color-bg)').attr('stroke-width', 4.5).attr('opacity', 0.9); svg.append('path').attr('d', line(ln)).style('fill', 'none').style('stroke', colr).attr('stroke-width', 2.2); });
+      // band 1's own points, hollow
+      [[melt, 1], [fus, 1]].forEach(([ln, kb]) => { const q = ln[9 - kb]; svg.append('circle').attr('cx', x(0)).attr('cy', y(q[1])).attr('r', 3.5).style('fill', 'var(--color-bg)').style('stroke', 'var(--color-fg-muted)').attr('stroke-width', 1.5)
+        .on('mousemove', (ev) => tip.lines(ev, [['k', 'Innermost band, model value (not drawn)'], ['', (ln === melt ? 'melting' : 'fusion') + ' line ' + fmt(q[1], 2) + ' m at band 1'], ['', 'the drawn centre carries band 2: ' + fmt(ln[7][1], 2) + ' m']])).on('mouseleave', () => tip.hide()); });
+      svg.append('text').attr('x', x(0.1)).attr('y', y(h.meltC) + 14).attr('font-size', 10).attr('font-weight', 600).style('fill', 'var(--color-fg)').text('1450 °C · ' + fmt(h.meltC, 1) + ' m');
+      svg.append('text').attr('x', x(0.1)).attr('y', y(h.fusC) - 6).attr('font-size', 10).attr('font-weight', 600).style('fill', 'var(--color-fg)').text('1150 °C · ' + fmt(h.fusC, 1) + ' m');
+      svg.append('text').attr('x', x(Rof(h.meltW) + 0.4)).attr('y', y(h.meltW) + 4).attr('font-size', 9.5).style('fill', dash.colors[0]).text('wall ' + fmt(h.meltW, 1) + ' m');
+      svg.append('text').attr('x', x(Rof(h.fusW) + 0.4)).attr('y', y(h.fusW) + 4).attr('font-size', 9.5).style('fill', dash.colors[1]).text('wall ' + fmt(h.fusW, 1) + ' m');
+      // colour key
+      const kx = W - m.r - 110, ky = m.t + 6; const grad = svg.append('defs').append('linearGradient').attr('id', 'im-cz-key').attr('x1', 0).attr('x2', 1); [0, 0.33, 0.66, 1].forEach((f) => grad.append('stop').attr('offset', f).attr('stop-color', col(f * 1800)));
+      svg.append('rect').attr('x', kx).attr('y', ky).attr('width', 100).attr('height', 8).style('fill', 'url(#im-cz-key)');
+      svg.append('text').attr('x', kx).attr('y', ky + 20).attr('font-size', 9).style('fill', 'var(--color-fg-muted)').text('solid 0 °C'); svg.append('text').attr('x', kx + 100).attr('y', ky + 20).attr('text-anchor', 'end').attr('font-size', 9).style('fill', 'var(--color-fg-muted)').text('1800 °C');
+    }
+    function drawProfiles(host) {
+      const W = Math.max(320, host.clientWidth || box.clientWidth || 720), H = 310, m = { t: 18, r: 16, b: 44, l: 44 };
+      host.style.minHeight = H + 'px';
+      const svg = d3.select(host).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', 'Solid temperature against height for each band, with the fusion window');
+      const x = d3.scaleLinear([0, 1800], [m.l, W - m.r]), y = d3.scaleLinear([Z[0] - 1, Z[NS - 1] + 1], [H - m.b, m.t]);
+      const tip = tooltip(host);
+      const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(9).tickSizeOuter(0)), ay = svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickSizeOuter(0));
+      [ax, ay].forEach((a) => { a.attr('font-size', null).attr('font-family', null); a.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 10); a.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)'); });
+      svg.append('text').attr('x', W - m.r).attr('y', H - 4).attr('text-anchor', 'end').attr('font-size', 10).style('fill', 'var(--color-fg-muted)').text('solid temperature, °C (CL58:CL153) — one line per band, labeled at the bosh slice; dots = the crossings');
+      svg.append('text').attr('x', m.l).attr('y', m.t - 6).attr('font-size', 10).style('fill', 'var(--color-fg-muted)').text('height, m');
+      svg.append('rect').attr('x', x(1150)).attr('y', y(Z[NS - 1] + 1)).attr('width', x(1450) - x(1150)).attr('height', y(Z[0] - 1) - y(Z[NS - 1] + 1)).style('fill', 'var(--bf-cz, ' + dash.colors[4] + ')').attr('opacity', 0.25);
+      [[1150, 'softening 1150'], [1450, 'melting 1450']].forEach(([T, lab]) => { svg.append('line').attr('x1', x(T)).attr('x2', x(T)).attr('y1', y(Z[0] - 1)).attr('y2', y(Z[NS - 1] + 1)).style('stroke', 'var(--cds-chart-reference)').attr('stroke-dasharray', '4 3'); svg.append('text').attr('x', x(T) + 3).attr('y', m.t + 8).attr('font-size', 9.5).style('fill', 'var(--color-fg-muted)').text(lab); });
+      const ln = d3.line().x((q) => x(q[0])).y((q) => y(q[1]));
+      const bcol = d3.scaleSequential([0, NB - 1], d3.interpolateRgbBasis([dash.colors[0], dash.colors[2], dash.colors[1]]));
+      for (let bI = 0; bI < NB; bI++) {
+        const pts = Z.map((zz, j) => [FD.Ts[bI][j], zz]);
+        const nm = c.radial && c.radial.bands[bI] ? c.radial.bands[bI].name : 'band ' + (bI + 1);
+        svg.append('path').attr('d', ln(pts)).style('fill', 'none').style('stroke', bcol(bI)).attr('stroke-width', bI === 0 ? 1 : 1.8).attr('stroke-dasharray', bI === 0 ? '3 3' : null).attr('opacity', 0.9)
+          .on('mousemove', (ev) => tip.lines(ev, [['k', nm + (bI === 0 ? ' (model value, not drawn)' : '')], ['', 'melting line ' + fmt(meltByBand[bI], 2) + ' m · fusion line ' + fmt(fusByBand[bI], 2) + ' m'], ['', 'the highest crossing of 1450 / 1150 °C on this profile']])).on('mouseleave', () => tip.hide());
+        svg.append('text').attr('x', x(FD.Ts[bI][0]) + (bI === NB - 1 ? -2 : 2)).attr('y', y(Z[0]) + 12).attr('text-anchor', bI === NB - 1 ? 'end' : 'start').attr('font-size', 8.5).style('fill', bcol(bI)).text(bI === 0 ? '1' : bI === NB - 1 ? '8 wall' : String(bI + 1));
+        [[meltByBand[bI], 1450], [fusByBand[bI], 1150]].forEach(([zz, T]) => { if (zz >= Z[0] - 1 && zz <= Z[NS - 1] + 1) svg.append('circle').attr('cx', x(T)).attr('cy', y(zz)).attr('r', 2.6).style('fill', bcol(bI)); });
+      }
     }
   }
 
@@ -4335,7 +4513,7 @@ window.dsPrice = function (c, p, k, inc) {
     const c = rows.find((r) => r.id === forcesCase);
     el('forces-title').textContent = codeOf(c) + ' (' + c.id + ')' + (c.name ? ' · ' + c.name : '');
     if (typeof drawForcesInto !== 'function') { side.replaceChildren(); const p = document.createElement('p'); p.className = 'ds-note'; p.textContent = 'The drawing module (forces_draw.js) did not load.'; side.append(p); return; }
-    drawForcesInto(box, side, el('legend-forces'), c, dash, d3, tooltip, FORCES_LEVERS, consts(deck), prices(deck), el('forces-table'), rows);
+    drawForcesInto(box, side, el('legend-forces'), c, dash, d3, tooltip, FORCES_LEVERS, consts(deck), prices(deck), el('forces-table'), rows, (typeof furnaceRows === 'function' ? furnaceRows() : []));
   }
   window.dsForcesCase = (id) => { if (pinned && pinned !== id) { pinned = null; highlight(null); } forcesCase = id; drawForces(); };   // a module's own case picker (the Atoms dropdown, AB-1b)
   
@@ -4372,7 +4550,7 @@ window.dsPrice = function (c, p, k, inc) {
     const c = rows.find((r) => r.id === gasbalanceCase);
     el('gasbalance-title').textContent = codeOf(c) + ' (' + c.id + ')' + (c.name ? ' · ' + c.name : '');
     if (typeof drawGasBalanceInto !== 'function') { side.replaceChildren(); const p = document.createElement('p'); p.className = 'ds-note'; p.textContent = 'The drawing module (gasbalance_draw.js) did not load.'; side.append(p); return; }
-    drawGasBalanceInto(box, side, el('legend-gasbalance'), c, dash, d3, tooltip, GASBALANCE_LEVERS, consts(deck), prices(deck), el('gasbalance-table'), rows);
+    drawGasBalanceInto(box, side, el('legend-gasbalance'), c, dash, d3, tooltip, GASBALANCE_LEVERS, consts(deck), prices(deck), el('gasbalance-table'), rows, (typeof furnaceRows === 'function' ? furnaceRows() : []));
   }
   window.dsGasbalanceCase = (id) => { if (pinned && pinned !== id) { pinned = null; highlight(null); } gasbalanceCase = id; drawGasbalance(); };   // a module's own case picker (the Atoms dropdown, AB-1b)
   
@@ -4436,7 +4614,7 @@ window.dsPrice = function (c, p, k, inc) {
     const c = rows.find((r) => r.id === stovesCase);
     el('stoves-title').textContent = codeOf(c) + ' (' + c.id + ')' + (c.name ? ' · ' + c.name : '');
     if (typeof drawStovesInto !== 'function') { side.replaceChildren(); const p = document.createElement('p'); p.className = 'ds-note'; p.textContent = 'The drawing module (stoves_draw.js) did not load.'; side.append(p); return; }
-    drawStovesInto(box, side, el('legend-stoves'), c, dash, d3, tooltip, STOVES_LEVERS, consts(deck), prices(deck), el('stoves-table'), rows);
+    drawStovesInto(box, side, el('legend-stoves'), c, dash, d3, tooltip, STOVES_LEVERS, consts(deck), prices(deck), el('stoves-table'), rows, (typeof furnaceRows === 'function' ? furnaceRows() : []));
   }
   window.dsStovesCase = (id) => { if (pinned && pinned !== id) { pinned = null; highlight(null); } stovesCase = id; drawStoves(); };   // a module's own case picker (the Atoms dropdown, AB-1b)
   
@@ -4455,7 +4633,7 @@ window.dsPrice = function (c, p, k, inc) {
     const c = rows.find((r) => r.id === atomsCase);
     el('atoms-title').textContent = codeOf(c) + ' (' + c.id + ')' + (c.name ? ' · ' + c.name : '');
     if (typeof drawAtomsInto !== 'function') { side.replaceChildren(); const p = document.createElement('p'); p.className = 'ds-note'; p.textContent = 'The drawing module (atoms_draw.js) did not load.'; side.append(p); return; }
-    drawAtomsInto(box, side, el('legend-atoms'), c, dash, d3, tooltip, ATOMS_LEVERS, consts(deck), prices(deck), el('atoms-table'), rows);
+    drawAtomsInto(box, side, el('legend-atoms'), c, dash, d3, tooltip, ATOMS_LEVERS, consts(deck), prices(deck), el('atoms-table'), rows, (typeof furnaceRows === 'function' ? furnaceRows() : []));
   }
   window.dsAtomsCase = (id) => { if (pinned && pinned !== id) { pinned = null; highlight(null); } atomsCase = id; drawAtoms(); };   // a module's own case picker (the Atoms dropdown, AB-1b)
   
@@ -4572,7 +4750,7 @@ window.dsPrice = function (c, p, k, inc) {
     const c = rows.find((r) => r.id === efficiencyCase);
     el('efficiency-title').textContent = codeOf(c) + ' (' + c.id + ')' + (c.name ? ' · ' + c.name : '');
     if (typeof drawEfficiencyInto !== 'function') { side.replaceChildren(); const p = document.createElement('p'); p.className = 'ds-note'; p.textContent = 'The drawing module (efficiency_draw.js) did not load.'; side.append(p); return; }
-    drawEfficiencyInto(box, side, el('legend-efficiency'), c, dash, d3, tooltip, EFFICIENCY_LEVERS, consts(deck), prices(deck), el('efficiency-table'), rows);
+    drawEfficiencyInto(box, side, el('legend-efficiency'), c, dash, d3, tooltip, EFFICIENCY_LEVERS, consts(deck), prices(deck), el('efficiency-table'), rows, (typeof furnaceRows === 'function' ? furnaceRows() : []));
   }
   window.dsEfficiencyCase = (id) => { if (pinned && pinned !== id) { pinned = null; highlight(null); } efficiencyCase = id; drawEfficiency(); };   // a module's own case picker (the Atoms dropdown, AB-1b)
   
@@ -4591,7 +4769,7 @@ window.dsPrice = function (c, p, k, inc) {
     const c = rows.find((r) => r.id === insideCase);
     el('inside-title').textContent = codeOf(c) + ' (' + c.id + ')' + (c.name ? ' · ' + c.name : '');
     if (typeof drawInsideInto !== 'function') { side.replaceChildren(); const p = document.createElement('p'); p.className = 'ds-note'; p.textContent = 'The drawing module (inside_draw.js) did not load.'; side.append(p); return; }
-    drawInsideInto(box, side, el('legend-inside'), c, dash, d3, tooltip, INSIDE_LEVERS, consts(deck), prices(deck), el('inside-table'), rows);
+    drawInsideInto(box, side, el('legend-inside'), c, dash, d3, tooltip, INSIDE_LEVERS, consts(deck), prices(deck), el('inside-table'), rows, (typeof furnaceRows === 'function' ? furnaceRows() : []));
   }
   window.dsInsideCase = (id) => { if (pinned && pinned !== id) { pinned = null; highlight(null); } insideCase = id; drawInside(); };   // a module's own case picker (the Atoms dropdown, AB-1b)
   
