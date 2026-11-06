@@ -136,6 +136,7 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
 .ds-panel { display: grid; gap: var(--cds-gap-lg); min-width: 0; }
 .ds-panel[hidden] { display: none; }
 .ds-priceline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-gap-xs) var(--cds-gap-sm); }
+.ds-units { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); } .ds-units span { margin-right: 6px; } .ds-units button { font: inherit; font-size: var(--cds-font-size-caption); padding: 3px 10px; border: 1px solid var(--color-border); background: transparent; color: var(--color-fg-muted); cursor: pointer; } .ds-units button:first-of-type { border-radius: 999px 0 0 999px; } .ds-units button:last-of-type { border-radius: 0 999px 999px 0; margin-left: -1px; } .ds-units button[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg, #fff); border-color: var(--color-fg); }
 .ds-pricetext { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; line-height: 1.45; }
 .ds-pricetext b { color: var(--color-fg); font-weight: 600; }
 .ds-ptable td.na { color: var(--color-fg-muted); }
@@ -226,10 +227,11 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
   <header class="ds-head" id="top">
     <h1 id="title">Decarbonization staircase</h1>
     <p class="ds-take dash-skeleton" id="takeaway" data-source="cases deck capital"></p>
-    <p class="ds-sub">A sample furnace on a pellet burden, every case solved by the blast furnace decarbonization model. Cost is the works basis per tonne of hot metal (tHM). Each tab shows one view. Change the prices or the capital counted and every tab reprices.</p>
+    <p class="ds-sub">A sample furnace on a pellet burden, every case solved by the blast furnace decarbonization model. Cost is the works basis per tonne of hot metal (tHM; per net ton, NTHM, when the units switch is on US). Each tab shows one view. Change the prices or the capital counted and every tab reprices.</p>
     <div class="ds-priceline">
       <p class="ds-pricetext" id="price-line" data-source="deck capital"></p>
       <button class="ds-btn" type="button" id="goto-prices">Change prices</button>
+      <div id="units-switch"></div>
     </div>
   </header>
 
@@ -649,8 +651,155 @@ html { background: var(--color-bg); } body { margin: 0; background: var(--color-
 
 
 
+
 <footer class="share-foot">Joe Morey · Morey Industrial Consulting, LLC · November 2026 · Results from a model under active development, shared for discussion. Self-contained copy of the working dashboard; nothing on this page is sent anywhere.</footer>
 </div>
+<script>
+(function () {
+/* units.js — the Metric / US switch (UN-1, 2026-11-05).
+   The page computes and formats everything in the model's units (SI, per tonne of hot metal). This module converts what
+   the reader SEES: after every render it walks the visible text (HTML and SVG), finds "number + unit" pairs and bare unit
+   tokens, and rewrites them in US practice units when the switch is on US, keeping each text node's metric original so
+   the sweep can be undone or redone. Table columns whose header carries the unit have their bare numbers converted too.
+   Chart axes and the Your furnace inputs use the helpers below (UNITS.axis, UNITS.n, UNITS.inv) at their own sites.
+   US conventions: lb/NTHM (net ton = 2,000 lb of hot metal) · °F · gr/scf (blast moisture) · scf and scfm at 60 °F,
+   14.696 psia (1 Nm³ = 37.327 scf) · psi(g) · MMBtu · in, ft · $/ton (short) · $/MMBtu.  */
+(() => {
+  const NT = 0.90718474;            // t → short ton, and per tHM → per NTHM
+  const SCF = 37.3269;              // scf per Nm³
+  const BTU = 947.817;              // Btu per MJ
+  // metric token → [a, b, us token]; v_us = a·v + b. Longest tokens first when matching.
+  const T = {
+    'kg/tHM': [2.0, 0, 'lb/NTHM'], 'kg C/tHM': [2.0, 0, 'lb C/NTHM'], 'kg O₂/tHM': [2.0, 0, 'lb O₂/NTHM'], 'kg CO₂/tHM': [2.0, 0, 'lb CO₂/NTHM'],
+    'kg/tHM O₂': [2.0, 0, 'lb/NTHM O₂'], 'kg coke/tHM': [2.0, 0, 'lb coke/NTHM'], 'kg/t': [2.0, 0, 'lb/ton'], 'kg of coke': [2.0, 0, 'lb of coke'], 'kg coke': [2.0, 0, 'lb coke'], 'kg of PCI': [2.0, 0, 'lb of PCI'], 'kg of NG': [2.0, 0, 'lb of NG'], 'kg of gas': [2.0, 0, 'lb of gas'], 'kg of scrap': [2.0, 0, 'lb of scrap'], 'kg of HBI': [2.0, 0, 'lb of HBI'],
+    't CO₂/tHM': [1, 0, 'ton CO₂/NTHM'], 't/tHM': [1, 0, 'ton/NTHM'], 't CO₂': [1, 0, 'ton CO₂'], 'kmol/tHM': [NT, 0, 'kmol/NTHM'],
+    'kg/s': [2.20462, 0, 'lb/s'], 'kg/h': [2.20462, 0, 'lb/h'], 'kg/Nm³': [2.20462 / SCF, 0, 'lb/scf'], 'kg/m³': [0.062428, 0, 'lb/ft³'], 'kg': [2.0, 0, 'lb'],   // on this page a bare kg is per tonne of hot metal: lb per net ton
+    't/h': [1.10231, 0, 'ton/h'], 't/d': [1.10231, 0, 'ton/d'], 't/rev': [1.10231, 0, 'ton/rev'], 't/m³': [62.428, 0, 'lb/ft³'], 't/y': [1.10231, 0, 'ton/y'], 'Mt/y': [1.10231, 0, 'Mton/y'], 't': [1.10231, 0, 'ton'],
+    '°C': [1.8, 32, '°F'],
+    'g/Nm³': [1 / 0.0647989 / SCF, 0, 'gr/scf'],
+    'Nm³/tHM': [SCF * NT, 0, 'scf/NTHM'], 'Nm³/min': [SCF, 0, 'scfm'], 'Nm³/h': [SCF, 0, 'scfh'], 'Nm³/s': [SCF, 0, 'scf/s'], 'Nm³': [SCF, 0, 'scf'],
+    'kPag': [0.145038, 0, 'psig'], 'kPa g': [0.145038, 0, 'psig'], 'kPa': [0.145038, 0, 'psi'], 'MPa': [145.038, 0, 'psi'],
+    'MJ/tHM': [BTU * NT / 1e6, 0, 'MMBtu/NTHM'], 'GJ/tHM': [BTU * NT / 1e3, 0, 'MMBtu/NTHM'], 'MJ/Nm³': [BTU / SCF, 0, 'Btu/scf'], 'MJ/kg': [BTU / 2.20462, 0, 'Btu/lb'], 'kJ/kg': [BTU / 2.20462 / 1e3, 0, 'Btu/lb'],
+    'MJ/t': [BTU * NT / 1e6, 0, 'MMBtu/ton'], 'GJ/t': [BTU * NT / 1e3, 0, 'MMBtu/ton'], 'MJ': [BTU / 1e6, 0, 'MMBtu'], 'GJ': [BTU / 1e3, 0, 'MMBtu'], 'kJ': [BTU / 1e3, 0, 'Btu'],
+    'kWh/tHM': [NT, 0, 'kWh/NTHM'], 'kWh/t': [NT, 0, 'kWh/ton'],
+    'MN/m': [224.809 / 3.28084, 0, 'klbf/ft'], 'kN/m': [0.224809 / 3.28084, 0, 'klbf/ft'], 'N/m': [0.224809 / 3.28084, 0, 'lbf/ft'], 'MN': [224.809, 0, 'klbf'], 'kN': [224.809 / 1e3, 0, 'klbf'], 'N': [0.224809, 0, 'lbf'],
+    't/m²/d': [1.10231 / 10.7639, 0, 'ton/ft²/d'], 't/m³/d': [1.10231 / 35.3147, 0, 'ton/ft³/d'], 'tHM/y': [1.10231, 0, 'NTHM/y'], 'mm/min': [0.0393701, 0, 'in/min'], 'kJ/Nm³': [BTU / SCF / 1e3, 0, 'Btu/scf'], 'kJ/s': [BTU / 1e3, 0, 'Btu/s'],
+    'mm/s': [0.0393701, 0, 'in/s'], 'mm': [0.0393701, 0, 'in'], 'cm': [0.393701, 0, 'in'], 'm/s': [3.28084, 0, 'ft/s'], 'm²': [10.7639, 0, 'ft²'], 'm³/s': [35.3147, 0, 'ft³/s'], 'm³/h': [35.3147, 0, 'ft³/h'], 'm³': [35.3147, 0, 'ft³'], 'm': [3.28084, 0, 'ft'],
+    '$/tHM': [NT, 0, '$/NTHM'], '/tHM': [NT, 0, '/NTHM'], 'per tHM': [NT, 0, 'per NTHM'], '$/t': [NT, 0, '$/ton'], '/t': [NT, 0, '/ton'], '$/GJ': [1 / 0.947817, 0, '$/MMBtu'], '/GJ': [1 / 0.947817, 0, '/MMBtu'],
+    '$/MJ': [1 / 0.000947817, 0, '$/MMBtu'],
+  };
+  const KEYS = Object.keys(T).sort((a, b) => b.length - a.length);
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const TOK = KEYS.map(esc).join('|');
+  // a number: sign, digits with optional thousands separators, optional decimals
+  const NUM = '([−\\-+±]?)(\\d{1,3}(?:,\\d{3})+|\\d+)(\\.\\d+)?';
+  const PAIR = new RegExp('(^|[^\\w.,$])' + NUM + '(\\s?)(' + TOK + ')(?=$|[^\\w²³₂])', 'g');
+  const BARE = new RegExp('(^|[^\\w$/])(' + TOK + ')(?=$|[^\\w²³₂])', 'g');
+  const DOLLAR = new RegExp('(\\$)' + NUM + '(/tHM|/t|/GJ|/MJ|\\sper tHM|\\sper t)(?=$|[^\\w²³₂])', 'g');
+  const HAS = new RegExp('(?:' + TOK + ')(?=$|[^\\w²³₂])');
+  const DELTA_CTX = /margin|Δ|delta|rise|drop|cool|warm|per |vs |against|differ|offset|change|headroom|within|under by|over by|swing|move|step|narrow|wide|±/i;
+
+  const U = { system: 'metric', T };
+  Object.defineProperty(U, 'us', { get: () => U.system === 'us' });
+  U.key = (u) => { const s = String(u || '').trim(); for (const k of KEYS) if (s === k || s.startsWith(k + ' ') || s.startsWith(k + ')')) return k; return null; };
+  const deltaOf = (k) => (k === '°C' ? [1.8, 0, '°F'] : T[k]);
+  U.n = (v, u, delta) => { if (!U.us) return v; const k = U.key(u); if (!k) return v; const [a, b] = delta ? deltaOf(k) : T[k]; return a * v + b; };
+  U.inv = (v, u, delta) => { if (!U.us) return v; const k = U.key(u); if (!k) return v; const [a, b] = delta ? deltaOf(k) : T[k]; return (v - b) / a; };
+  U.label = (u) => { if (!U.us || u == null) return u; return String(u).replace(BARE, (m, pre, tok) => pre + T[tok][2]); };
+  const dec = (d0, a) => Math.max(0, Math.ceil(d0 - Math.log10(Math.abs(a)) - 0.3));   // keep about the same significant figures
+  U.d = (d, u) => { if (!U.us) return d; const k = U.key(u); if (!k) return d; return dec(d, T[k][0]); };
+  U.v = (v, u, d = 0, delta) => U.n(v, u, delta).toFixed(U.d(d, u));
+  U.fmt = (v, d = 0, u = '', delta) => (v == null || !isFinite(v) ? '—' : Number(U.n(v, u, delta)).toLocaleString('en-US', { minimumFractionDigits: U.d(d, u), maximumFractionDigits: U.d(d, u) }) + U.label(u));
+  // d3 axes: ticks at values that are round in the DISPLAYED unit, mapped back to the metric scale
+  U.axis = (ax, u, n = 6, wrap) => {
+    const sc = ax.scale(); const k = U.key(u);
+    if (!U.us || !k || !sc.domain || typeof window.d3 === 'undefined') return ax;
+    const [a, b] = T[k], dom = sc.domain(), lo = a * dom[0] + b, hi = a * dom[dom.length - 1] + b;
+    const tv = window.d3.ticks(Math.min(lo, hi), Math.max(lo, hi), n).map((x) => (x - b) / a);
+    const fmtT = (x, i) => { const y = a * x + b; const r = (Math.abs(y) >= 1e3 ? window.d3.format(',~f')(Math.round(y)) : window.d3.format('~f')(Number(y.toPrecision(3)))).replace('-', '−'); return wrap ? wrap(r, y, i === tv.length - 1) : r; };
+    return ax.tickValues(tv).tickFormat(fmtT);
+  };
+  U.money = (s, y) => (y < 0 ? '−$' : '$') + s.replace('−', '');          // a wrap for $ axes
+  U.moneySgn = (s, y) => (y === 0 ? '$0' : (y < 0 ? '−$' : '+$') + s.replace('−', ''));
+  // text conversion: "443.8 kg/tHM" → "887.6 lb/NTHM"; "$415.19/tHM" → "$376.72/NTHM"; bare "kg/tHM" → "lb/NTHM"
+  const fmtNum = (y, decimals, grouped) => { const s = Math.abs(y).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: grouped }); return s; };
+  const convNum = (sign, int, frac, k, delta, grouped) => {
+    const v = Number(int.replace(/,/g, '') + (frac || '')) * (sign === '−' || sign === '-' ? -1 : 1);
+    const [a, b] = delta ? deltaOf(k) : T[k];
+    const y = a * v + b, d0 = frac ? frac.length - 1 : 0, d = dec(d0, a);
+    const neg = y < 0 && sign !== '±';
+    return (neg ? '−' : (sign === '+' || sign === '±' ? sign : '')) + fmtNum(y, d, grouped || Math.abs(y) >= 10000);
+  };
+  U.text = (s) => {
+    if (!U.us || !s || !HAS.test(s)) return s;
+    let out = s.replace(DOLLAR, (m, dol, sign, int, frac, tok) => { const k = tok.trim(); const kk = k === 'per tHM' ? 'per tHM' : k === 'per t' ? '/t' : k; return dol + convNum(sign, int, frac, kk, false, int.includes(',')) + (k === 'per tHM' ? ' per NTHM' : k === 'per t' ? ' per ton' : T[kk][2]); });
+    out = out.replace(PAIR, (m, pre, sign, int, frac, sp, tok, off) => {
+      const k = tok; const absT = k === '°C';
+      const ctx = out.slice(Math.max(0, off - 40), off);
+      const delta = absT && (sign !== '' || DELTA_CTX.test(ctx) || Math.abs(Number(int.replace(/,/g, ''))) < 100);
+      return pre + convNum(sign, int, frac, k, delta, int.includes(',')) + sp + T[k][2];
+    });
+    out = out.replace(BARE, (m, pre, tok, off) => (/\$\s?[\d,.]+\s?$/.test(out.slice(Math.max(0, off - 16), off + pre.length)) ? m : pre + T[tok][2]));   // '$35 mm' is millions, not millimetres
+    return out;
+  };
+  // the sweep: every text node under root; originals kept so the switch can go back
+  const orig = new WeakMap();
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'CODE', 'PRE']);   // option labels convert; their values do not
+  let sweeping = false;
+  U.sweep = (root) => {
+    root = root || document.body; if (!root) return;
+    sweeping = true;
+    try {
+      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => { const p = n.parentElement; if (!p || SKIP.has(p.tagName) || p.closest('[data-units-skip]')) return NodeFilter.FILTER_REJECT; return NodeFilter.FILTER_ACCEPT; } });
+      const nodes = []; for (let n = w.nextNode(); n; n = w.nextNode()) nodes.push(n);
+      nodes.forEach((n) => { let o = orig.get(n); if (o === undefined) { o = n.data; if (!HAS.test(o)) return; orig.set(n, o); } const t = U.us ? U.text(o) : o; if (n.data !== t) n.data = t; });
+      // table columns whose header names the unit: bare numbers in the cells
+      root.querySelectorAll('table').forEach((tbl) => {
+        const ths = tbl.tHead ? [...tbl.tHead.rows[0].cells] : []; if (!ths.length) return;
+        const units = ths.map((th) => { const o = orig.get(th.firstChild) !== undefined ? orig.get(th.firstChild) : th.textContent; const toks = []; let m; const re = new RegExp(BARE.source, 'g'); while ((m = re.exec(o))) toks.push(m[2]); return toks.length && !/\d/.test(o) ? toks : null; });
+        if (!units.some(Boolean)) return;
+        [...tbl.tBodies].forEach((tb) => [...tb.rows].forEach((tr) => [...tr.cells].forEach((td, i) => {
+          const toks = units[i]; if (!toks || td.children.length) return; const n = td.firstChild; if (!n || n.nodeType !== 3) return;
+          let o = orig.get(n); if (o === undefined) { o = n.data; orig.set(n, o); }
+          const parts = o.split(' / ');
+          const conv = parts.map((p, j) => { const k = toks[Math.min(j, toks.length - 1)]; const m = p.trim().match(new RegExp('^([−\\-+±]?)(\\$?)' + NUM.replace(/^\(\[[^\]]*\]\?\)/, '') + '$')); if (!m || !U.us) return p; const delta = k === '°C' && (m[1] !== '' || DELTA_CTX.test(o)); return (m[1] && m[1] !== '-' ? m[1] : m[1] === '-' ? '−' : '') + m[2] + convNum('', m[3], m[4], k, delta, m[3].includes(',')); });
+          const t = U.us ? conv.join(' / ') : o; if (n.data !== t) n.data = t;
+        })));
+      });
+      // elements that declare their own unit for a bare number (data-unit="kg/tHM")
+      root.querySelectorAll('[data-unit]').forEach((e) => { const n = e.firstChild; if (!n || n.nodeType !== 3) return; let o = orig.get(n); if (o === undefined) { o = n.data; orig.set(n, o); } const k = U.key(e.dataset.unit); const m = o.trim().match(new RegExp('^([−\\-+±]?)(\\$?)' + NUM.replace(/^\(\[[^\]]*\]\?\)/, '') + '$')); const t = U.us && k && m ? (m[1] === '-' ? '−' : m[1]) + m[2] + convNum('', m[3], m[4], k, false, m[3].includes(',')) : o; if (n.data !== t) n.data = t; });
+    } finally { sweeping = false; }
+  };
+  let queued = false;
+  const schedule = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; U.sweep(); }); };
+  // persistence and the control
+  try { const s = localStorage.getItem('ds-units'); if (s === 'us' || s === 'metric') U.system = s; } catch (e) {}
+  U.set = (sys) => {
+    U.system = sys === 'us' ? 'us' : 'metric';
+    try { localStorage.setItem('ds-units', U.system); } catch (e) {}
+    document.querySelectorAll('.ds-units button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sys === U.system)));
+    if (typeof window.dsRerender === 'function') window.dsRerender();
+    U.sweep();
+    window.dispatchEvent(new CustomEvent('ds-units', { detail: U.system }));
+  };
+  const mountControl = () => {
+    const box = document.getElementById('units-switch'); if (!box || box.childElementCount) return;
+    box.className = 'ds-units'; box.setAttribute('data-units-skip', '');
+    const lab = document.createElement('span'); lab.textContent = 'Units'; box.append(lab);
+    [['metric', 'Metric'], ['us', 'US']].forEach(([sys, name]) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.sys = sys; b.textContent = name; b.setAttribute('aria-pressed', String(U.system === sys)); b.title = sys === 'us' ? 'lb/NTHM (net ton of hot metal), °F, gr/scf, scf, psi, MMBtu, in and ft, $/ton' : 'kg/tHM, °C, g/Nm³, Nm³, kPa, MJ, mm and m, $/t'; b.addEventListener('click', () => U.set(sys)); box.append(b); });
+  };
+  const start = () => {
+    mountControl();
+    const mo = new MutationObserver(() => { if (!sweeping) schedule(); });
+    mo.observe(document.body, { subtree: true, childList: true, characterData: true });
+    schedule();
+  };
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+  window.UNITS = U;
+})();
+
+})();
+</script>
 <script>
 (function () {
 // Raceway cutaway: a vertical section through one tuyere axis. x = metres into the furnace from the
@@ -1990,7 +2139,7 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
   const val = (d, vsB) => (view === 'coke' ? (vsB ? d.cokeB : d.coke) : view === 'co2' ? (vsB ? d.co2B : d.co2) : (vsB ? d.costB : d.cost));
   const unit = view === 'coke' ? ' kg/tHM' : view === 'co2' ? ' t/tHM' : ' $/tHM';
   const dec = view === 'coke' ? 1 : view === 'co2' ? 3 : 2;
-  const fv = (v) => (view === 'cost' ? (v == null ? '—' : (v < 0 ? '−$' : '+$') + Math.abs(v).toFixed(2)) : sgn(v, dec, unit));
+  const fv = (v) => (view === 'cost' ? (v == null ? '—' : (v < 0 ? '−$' : '+$') + Math.abs(v).toFixed(2) + '/tHM') : sgn(v, dec, unit));
   const W = 1120, H = 470, m = { t: 40, b: 30 };
   const svg = d3.select(box).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', 'Efficiency options against PCI-100');
   const text = (x, y, t, o = {}) => svg.append('text').attr('x', x).attr('y', y).attr('font-size', o.size || 10.5).attr('text-anchor', o.anchor || 'start').attr('font-weight', o.bold ? 600 : 400).style('fill', o.fill || 'var(--color-fg)').text(t);
@@ -2012,7 +2161,7 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
       .on('click', () => { if (typeof dsPinCase === 'function') dsPinCase(d.r.id); });
     hover(g, [[`${d.r.option} (${code(d.r)}, ${d.r.id})`], ['coke', sgn(d.coke, 1, ' kg/tHM'), 'vs ' + code(d.base || B)], ['CO₂ emitted', sgn(d.co2, 3, ' t/tHM')], ['cost', d.cost == null ? '—' : (d.cost < 0 ? '−$' : '+$') + Math.abs(d.cost).toFixed(2) + '/tHM', 'works basis at the current prices'], ['capital', d.r.capital.length ? d.r.capital.map((key) => key.toUpperCase() + ' ' + fmt(d.r.capitalMM[key], 0, ' $mm')).join(', ') : 'none beyond the base plant']]);
   });
-  const ax = svg.append('g').attr('transform', `translate(0,${H - m.b + 4})`).call(d3.axisBottom(x).ticks(5).tickFormat((t) => (view === 'cost' ? (t < 0 ? '−$' : '$') + Math.abs(t) : t)).tickSizeOuter(0));
+  const ax = svg.append('g').attr('transform', `translate(0,${H - m.b + 4})`).call(UNITS.axis(d3.axisBottom(x).ticks(5).tickFormat((t) => (view === 'cost' ? (t < 0 ? '−$' : '$') + Math.abs(t) : t)), unit, 5, view === 'cost' ? UNITS.money : undefined).tickSizeOuter(0));
   ax.attr('font-size', null).attr('font-family', null); ax.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 10); ax.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
   // right panel: the ladder as a staircase of the cumulative value vs B
   const R = { x0: 700, x1: 1100, y0: m.t + 10, y1: H - m.b - 20 };
@@ -2020,7 +2169,7 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
   const lad = [{ level: 0, v: 0, d: null }].concat(ladder.map((d) => ({ level: d.r.ladderLevel, v: val(d, true), d })));
   const ly = d3.scaleLinear(d3.extent(lad.map((q) => q.v ?? 0).concat([0])), [R.y1, R.y0]).nice();
   const lx = d3.scalePoint(lad.map((q) => q.level), [R.x0 + 20, R.x1 - 20]);
-  const ay = svg.append('g').attr('transform', `translate(${R.x0},0)`).call(d3.axisLeft(ly).ticks(5).tickFormat((t) => (view === 'cost' ? (t < 0 ? '−$' : '$') + Math.abs(t) : t)).tickSizeOuter(0));
+  const ay = svg.append('g').attr('transform', `translate(${R.x0},0)`).call(UNITS.axis(d3.axisLeft(ly).ticks(5).tickFormat((t) => (view === 'cost' ? (t < 0 ? '−$' : '$') + Math.abs(t) : t)), unit, 5, view === 'cost' ? UNITS.money : undefined).tickSizeOuter(0));
   ay.attr('font-size', null).attr('font-family', null); ay.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 10); ay.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
   svg.append('line').attr('x1', R.x0).attr('x2', R.x1).attr('y1', ly(0)).attr('y2', ly(0)).attr('stroke', 'var(--cds-chart-grid)');
   const step = d3.line().x((q) => lx(q.level)).y((q) => ly(q.v ?? 0)).curve(d3.curveStepAfter);
@@ -2031,7 +2180,7 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
     text(lx(q.level), R.y1 + 16, q.level === 0 ? code(B || { id: 'B' }) : String(q.level), { anchor: 'middle', size: 10 });
     if (q.d) { text(lx(q.level), ly(q.v ?? 0) - 10, fv(q.v), { anchor: 'middle', size: 9.5, fill: 'var(--color-fg-muted)' });
       g.append('rect').attr('x', lx(q.level) - 20).attr('y', R.y0 - 10).attr('width', 40).attr('height', R.y1 - R.y0 + 30).style('fill', 'transparent').style('cursor', 'pointer').on('click', () => { if (typeof dsPinCase === 'function') dsPinCase(q.d.r.id); });
-      hover(g, [[`Level ${q.level}: ${q.d.r.option} (${code(q.d.r)}, ${q.d.r.id})`], ['vs the base', sgn(q.d.cokeB, 1, ' kg coke'), sgn(q.d.co2B, 3, ' t CO₂') + ' · ' + (q.d.costB == null ? '—' : (q.d.costB < 0 ? '−$' : '+$') + Math.abs(q.d.costB).toFixed(2))], ['this step', sgn(q.d.coke, 1, ' kg coke'), sgn(q.d.co2, 3, ' t CO₂') + ' · ' + (q.d.cost == null ? '—' : (q.d.cost < 0 ? '−$' : '+$') + Math.abs(q.d.cost).toFixed(2))]]); }
+      hover(g, [[`Level ${q.level}: ${q.d.r.option} (${code(q.d.r)}, ${q.d.r.id})`], ['vs the base', sgn(q.d.cokeB, 1, ' kg coke'), sgn(q.d.co2B, 3, ' t CO₂') + ' · ' + (q.d.costB == null ? '—' : (q.d.costB < 0 ? '−$' : '+$') + Math.abs(q.d.costB).toFixed(2) + '/tHM')], ['this step', sgn(q.d.coke, 1, ' kg coke'), sgn(q.d.co2, 3, ' t CO₂') + ' · ' + (q.d.cost == null ? '—' : (q.d.cost < 0 ? '−$' : '+$') + Math.abs(q.d.cost).toFixed(2))]]); }
   });
   text(R.x0, H - 6, 'levels: ' + ladder.map((d) => d.r.ladderLevel + ' ' + d.r.option.replace(/ \(.*$/, '')).join(' · '), { size: 9, fill: 'var(--color-fg-muted)' });
 
@@ -2040,14 +2189,14 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
   const H2 = 330, m2 = { t: 44, b: 86 };
   const svg2 = d3.select(box).append('svg').attr('viewBox', `0 0 ${W} ${H2}`).attr('role', 'img').attr('aria-label', 'The ladder as a stairstep of works-basis cost and CO₂ emitted');
   const text2 = (x0, y0, t, o = {}) => svg2.append('text').attr('x', x0).attr('y', y0).attr('font-size', o.size || 10.5).attr('text-anchor', o.anchor || 'start').attr('font-weight', o.bold ? 600 : 400).style('fill', o.fill || 'var(--color-fg)').text(t);
-  const stairs = (P, title, get, fmtAbs, fmtStep, col) => {
+  const stairs = (P, title, get, fmtAbs, fmtStep, col, axUnit) => {
     const pts = [{ level: 0, v: pB ? get(pB) : null, d: null, label: code(B || { id: 'B' }) }].concat(ladder.map((d) => ({ level: d.r.ladderLevel, v: d.pr ? get(d.pr) : null, d, label: shortOpt(d.r.option) })));
     if (pts.some((q) => q.v == null)) { text2(P.x0, 20, title + ' — prices not available', { bold: true, size: 11 }); return; }
     text2(P.x0, 20, title, { bold: true, size: 11 });
     const ext2 = d3.extent(pts.map((q) => q.v)), pad = (ext2[1] - ext2[0]) * 0.18 || 1;
     const sy = d3.scaleLinear([ext2[0] - pad, ext2[1] + pad], [H2 - m2.b, m2.t]).nice();
     const sx = d3.scaleBand(pts.map((q) => q.level), [P.x0 + 44, P.x1]).paddingInner(0.08);
-    const ay2 = svg2.append('g').attr('transform', `translate(${P.x0 + 44},0)`).call(d3.axisLeft(sy).ticks(5).tickFormat(fmtAbs).tickSizeOuter(0));
+    const ay2 = svg2.append('g').attr('transform', `translate(${P.x0 + 44},0)`).call(UNITS.axis(d3.axisLeft(sy).ticks(5).tickFormat(fmtAbs), axUnit, 5, axUnit === '$/tHM' ? UNITS.money : undefined).tickSizeOuter(0));
     ay2.attr('font-size', null).attr('font-family', null); ay2.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 10); ay2.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
     pts.forEach((q, i) => {
       const g = svg2.append('g'); const x0 = sx(q.level), w = sx.bandwidth(), y0 = sy(q.v), base = H2 - m2.b;
@@ -2057,12 +2206,12 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
       if (q.d) text2(x0 + w / 2, y0 + 13, fmtStep(q.v - pts[i - 1].v), { anchor: 'middle', size: 8.5, fill: 'var(--color-bg)' });
       svg2.append('text').attr('transform', `translate(${x0 + w / 2},${base + 8}) rotate(-38)`).attr('text-anchor', 'end').attr('font-size', 9.5).style('fill', 'var(--color-fg)').attr('font-weight', q.d && q.d.r.id === sel.r.id ? 600 : 400).text(q.level === 0 ? q.label : q.level + ' ' + q.label);
       if (q.d) { g.style('cursor', 'pointer').on('click', () => { if (typeof dsPinCase === 'function') dsPinCase(q.d.r.id); });
-        hover(g, [[`Level ${q.level}: ${q.d.r.option} (${code(q.d.r)}, ${q.d.r.id})`], ['works-basis cost', usd(q.d.pr.works) + '/tHM', (q.d.cost == null ? '' : (q.d.cost < 0 ? '−$' : '+$') + Math.abs(q.d.cost).toFixed(2) + ' this step') + (q.d.costB == null ? '' : ' · ' + (q.d.costB < 0 ? '−$' : '+$') + Math.abs(q.d.costB).toFixed(2) + ' vs ' + code(B || { id: 'B' }))], ['CO₂ emitted', fmt(q.d.pr.vent.emitted, 3, ' t/tHM'), sgn(q.d.co2, 3, ' this step') + ' · ' + sgn(q.d.co2B, 3, ' vs ' + code(B || { id: 'B' }))], ['coke', fmt(q.d.r.values.coke, 1, ' kg/tHM'), sgn(q.d.coke, 1, ' this step')]]); }
+        hover(g, [[`Level ${q.level}: ${q.d.r.option} (${code(q.d.r)}, ${q.d.r.id})`], ['works-basis cost', usd(q.d.pr.works) + '/tHM', (q.d.cost == null ? '' : (q.d.cost < 0 ? '−$' : '+$') + Math.abs(q.d.cost).toFixed(2) + '/tHM this step') + (q.d.costB == null ? '' : ' · ' + (q.d.costB < 0 ? '−$' : '+$') + Math.abs(q.d.costB).toFixed(2) + ' vs ' + code(B || { id: 'B' }))], ['CO₂ emitted', fmt(q.d.pr.vent.emitted, 3, ' t/tHM'), sgn(q.d.co2, 3, ' this step') + ' · ' + sgn(q.d.co2B, 3, ' vs ' + code(B || { id: 'B' }))], ['coke', fmt(q.d.r.values.coke, 1, ' kg/tHM'), sgn(q.d.coke, 1, ' this step')]]); }
       else hover(g, [[`${code(B || { id: 'B' })} (B): the base of the ladder`], ['works-basis cost', usd(pB.works) + '/tHM'], ['CO₂ emitted', fmt(pB.vent.emitted, 3, ' t/tHM')]]);
     });
   };
-  stairs({ x0: 10, x1: 540 }, 'Works-basis cost down the ladder, $/tHM at the current prices', (q) => q.works, (v) => usd(v), (v) => (v < 0 ? '−$' : '+$') + Math.abs(v).toFixed(2), dash.colors[3]);
-  stairs({ x0: 580, x1: 1100 }, 'CO₂ emitted down the ladder, t/tHM (gross plus the stoves’ gas)', (q) => q.vent.emitted, (v) => fmt(v, 3), (v) => sgn(v, 3), dash.colors[1]);
+  stairs({ x0: 10, x1: 540 }, 'Works-basis cost down the ladder, $/tHM at the current prices', (q) => q.works, (v) => usd(v) + '/tHM', (v) => (v < 0 ? '−$' : '+$') + Math.abs(v).toFixed(2) + '/tHM', dash.colors[3], '$/tHM');
+  stairs({ x0: 580, x1: 1100 }, 'CO₂ emitted down the ladder, t/tHM (gross plus the stoves’ gas)', (q) => q.vent.emitted, (v) => fmt(v, 3), (v) => sgn(v, 3), dash.colors[1], 't/tHM');
   text2(10, H2 - 4, 'Each tread is a level of the ladder (the previous level plus one project); the number on the bar is the level, the number inside it the step from the level before. Click a step to pin that case.', { size: 9, fill: 'var(--color-fg-muted)' });
 
   // ---------------- the side panel: the selected option ----------------
@@ -2074,7 +2223,7 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
   add('Against', s.r.group === 'ladder' ? (s.r.ladderLevel > 1 ? `level ${s.r.ladderLevel - 1} (${code(s.base || B)})` : code(B || { id: 'B' }) + ' (B)') : code(B || { id: 'B' }) + ' (B), the base of every point', s.r.group === 'ladder' ? 'the step this level adds; the cumulative figures are against B' : '');
   add('Coke', `${fmt(s.r.values.coke, 1, ' kg/tHM')} (${sgn(s.coke, 1)})` + (s.r.group === 'ladder' ? ` · cumulative ${sgn(s.cokeB, 1)} vs B` : ''));
   add('CO₂ emitted', `${s.pr ? fmt(s.pr.vent.emitted, 3, ' t/tHM') : '—'} (${sgn(s.co2, 3)})` + (s.r.group === 'ladder' ? ` · cumulative ${sgn(s.co2B, 3)} vs B` : ''), 'gross CO₂ plus the stoves’ natural gas');
-  add('Works-basis cost', `${s.pr ? usd(s.pr.works) + '/tHM' : '—'} (${s.cost == null ? '—' : (s.cost < 0 ? '−$' : '+$') + Math.abs(s.cost).toFixed(2)})` + (s.r.group === 'ladder' ? ` · cumulative ${s.costB == null ? '—' : (s.costB < 0 ? '−$' : '+$') + Math.abs(s.costB).toFixed(2)} vs B` : ''),
+  add('Works-basis cost', `${s.pr ? usd(s.pr.works) + '/tHM' : '—'} (${s.cost == null ? '—' : (s.cost < 0 ? '−$' : '+$') + Math.abs(s.cost).toFixed(2) + '/tHM'})` + (s.r.group === 'ladder' ? ` · cumulative ${s.costB == null ? '—' : (s.costB < 0 ? '−$' : '+$') + Math.abs(s.costB).toFixed(2) + '/tHM'} vs B` : ''),
     `of which capital ${sgn(s.capex, 2)}, burden ${sgn(s.burden, 2)}, TRT/CDQ credit ${sgn(-(s.trt || 0), 2)}, stove enrichment ${sgn(s.stove, 2)} $/tHM`);
   add('Capital beyond the base plant', s.r.capital.length ? s.r.capital.map((key) => key.toUpperCase() + ' ' + fmt(s.r.capitalMM[key], 0, ' $mm')).join(', ') : 'none', 'counted as ticked on the Capital tab');
   add('Flame · top gas', `${fmt(s.r.values.flame, 0, ' °C')} (${sgn(s.r.delta.flame, 0)}) · solver ${fmt(s.r.values.ttopSolver, 0, ' °C')} (${sgn(s.r.delta.ttopSolver, 0)}), map ${fmt(s.r.values.ttopMap, 0, ' °C')}`, 'the flame ceiling 2,200 °C; both top-gas bases ≥ 110 °C');
@@ -2112,7 +2261,7 @@ function drawEfficiencyInto(box, side, legend, c, dash, d3, tooltip, levers, k, 
         const t = document.createElement('p'); t.textContent = lv.does; li.append(t);
         const n = document.createElement('p'); n.className = 'ds-note';
         n.textContent = `This step: coke ${sgn(d.coke, 1, ' kg/tHM')}, CO₂ emitted ${sgn(d.co2, 3, ' t/tHM')}, works cost ${d.cost == null ? '—' : (d.cost < 0 ? '−$' : '+$') + Math.abs(d.cost).toFixed(2) + '/tHM'}`
-          + ` · cumulative vs B: coke ${sgn(d.cokeB, 1)}, CO₂ ${sgn(d.co2B, 3)}, cost ${d.costB == null ? '—' : (d.costB < 0 ? '−$' : '+$') + Math.abs(d.costB).toFixed(2)}`
+          + ` · cumulative vs B: coke ${sgn(d.cokeB, 1)}, CO₂ ${sgn(d.co2B, 3)}, cost ${d.costB == null ? '—' : (d.costB < 0 ? '−$' : '+$') + Math.abs(d.costB).toFixed(2) + '/tHM'}`
           + ` · at this level: flame ${fmt(d.r.values.flame, 0, ' °C')}, solver top gas ${fmt(d.r.values.ttopSolver, 0, ' °C')}, bed ${fmt(d.r.values.fluidization, 2)}`
           + (alone ? ` · the same project alone on B (${code(alone.r)}): coke ${sgn(alone.coke, 1)}` : '') + ` · heat budgets: ${lv.budget}.`;
         li.append(n);
@@ -2357,7 +2506,11 @@ const YF_ZONE_DEFAULTS = (rw) => {
 const YF_COOLING = ['Copper staves', 'Cast iron staves', 'Plate coolers', 'Spray cooling', 'Tuyere coolers', 'Carbon hearth + cooling', 'Hearth bottom cooling', 'None'];
 const YF_LINING = ['Skull protected', 'Copper hot face', 'Refractory brick', 'Silicon carbide', 'Carbon block', 'Micropore carbon', 'Graphite'];
 
-const yfFmt = (v, step) => { const d = step && step < 1 ? Math.max(0, Math.ceil(-Math.log10(step))) : 0; return String(+Number(v).toFixed(d)); };
+// UN-1: a field's number is shown in the units switch's system and stored in the model's (a 'rise' or 'margin' in °C is a difference)
+const yfDelta = (f) => /rise|margin|differ|Δ|drop/i.test(f.label || '');
+const yfShow = (f, v) => (v === '' || v == null ? v : UNITS.n(Number(v), f.unit, yfDelta(f)));
+const yfStore = (f, v) => UNITS.inv(v, f.unit, yfDelta(f));
+const yfFmt = (v, step, unit) => { const d = UNITS.d(step && step < 1 ? Math.max(0, Math.ceil(-Math.log10(step))) : 0, unit || ''); return String(+Number(v).toFixed(d)); };
 
 // ---- state ----
 let yfState = null, yfBuilt = false, yfZones = null, yfLast = null, yfTouched = false;
@@ -2631,7 +2784,7 @@ function yfDrawProfiles(box, d3, tooltip, s, zones, sample, r, colors, legendBox
   panel(0, sampleShell, 'Sample furnace', sampleZones, { n: st.n, d: st.d_mm }, fz.stockline || 28, (fz.working_volume || 3000) + ' m³ working volume · ' + (fz.production_tpd || 6500) + ' t/d');
   panel(1, plantShell, 'Your furnace' + (s.name && s.name !== 'Sample furnace' ? ': ' + s.name : ''), zones, { n: g('nTuyActive'), d: g('tuyD') }, g('stockline'), r.profileVol.toFixed(0) + ' m³ drawn (' + g('workingVol').toFixed(0) + ' stated) · ' + g('prod').toFixed(0) + ' t/d');
   // elevation axis on the left
-  const ax = d3.axisLeft(d3.scaleLinear([zMin, zMax], [y(zMin), y(zMax)])).ticks(8).tickSizeOuter(0);
+  const ax = UNITS.axis(d3.axisLeft(d3.scaleLinear([zMin, zMax], [y(zMin), y(zMax)])).ticks(8), 'm', 8).tickSizeOuter(0);
   const axg = svg.append('g').attr('transform', `translate(${m.l - 6},0)`).call(ax);
   axg.attr('font-size', null).attr('font-family', null); axg.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 10); axg.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
   svg.append('text').attr('x', 4).attr('y', m.t - 8).attr('font-size', 10).style('fill', 'var(--color-fg-muted)').text('m above the tuyeres');
@@ -2672,9 +2825,9 @@ function drawYourfurnaceInto(root, ctx) {
         const name = document.createElement('span'); name.className = 'lab'; name.textContent = f.label + (f.unit ? ' (' + f.unit + ')' : ''); wrap.append(name);
         let inp;
         if (f.type === 'select') { inp = document.createElement('select'); f.options.forEach((o) => { const op = document.createElement('option'); op.value = o; op.textContent = o; inp.append(op); }); inp.value = String(yfValue(f.key, yfState, sample)); }
-        else { inp = document.createElement('input'); inp.type = f.type === 'text' ? 'text' : 'number'; if (f.step) inp.step = String(f.step); inp.value = f.type === 'text' ? String(yfValue(f.key, yfState, sample)) : yfFmt(yfValue(f.key, yfState, sample), f.step); }
+        else { inp = document.createElement('input'); inp.type = f.type === 'text' ? 'text' : 'number'; if (f.step) inp.step = UNITS.us && UNITS.key(f.unit) ? 'any' : String(f.step); inp.value = f.type === 'text' ? String(yfValue(f.key, yfState, sample)) : yfFmt(yfShow(f, yfValue(f.key, yfState, sample)), f.step, f.unit); }
         inp.id = 'yf-' + f.key;
-        inp.addEventListener('input', () => { yfTouched = true; yfState[f.key] = f.type === 'text' || f.type === 'select' ? inp.value : (inp.value === '' ? '' : Number(inp.value)); showWhen(); refresh(); });
+        inp.addEventListener('input', () => { yfTouched = true; yfState[f.key] = f.type === 'text' || f.type === 'select' ? inp.value : (inp.value === '' ? '' : yfStore(f, Number(inp.value))); showWhen(); refresh(); });
         wrap.append(inp);
         if (f.note) { const sm = document.createElement('small'); sm.textContent = f.note; wrap.append(sm); }
         grid.append(wrap);
@@ -2695,7 +2848,7 @@ function drawYourfurnaceInto(root, ctx) {
     const tb = t.createTBody();
     yfZones.forEach((z, i) => {
       const tr = tb.insertRow();
-      const mk = (val, kind, key) => { const td = tr.insertCell(); let inp; if (kind === 'select') { inp = document.createElement('select'); (key === 'cooling' ? YF_COOLING : YF_LINING).forEach((o) => { const op = document.createElement('option'); op.value = o; op.textContent = o; inp.append(op); }); if (!(key === 'cooling' ? YF_COOLING : YF_LINING).includes(val)) { const op = document.createElement('option'); op.value = val; op.textContent = val; inp.append(op); } } else { inp = document.createElement('input'); inp.type = kind; if (kind === 'number') inp.step = '0.5'; } inp.value = val; inp.className = 'ds-yf-cell'; inp.addEventListener('input', () => { yfTouched = true; z[key] = kind === 'number' ? Number(inp.value) : inp.value; z.typical = false; refresh(); }); td.append(inp); };
+      const mk = (val, kind, key) => { const td = tr.insertCell(); let inp; if (kind === 'select') { inp = document.createElement('select'); (key === 'cooling' ? YF_COOLING : YF_LINING).forEach((o) => { const op = document.createElement('option'); op.value = o; op.textContent = o; inp.append(op); }); if (!(key === 'cooling' ? YF_COOLING : YF_LINING).includes(val)) { const op = document.createElement('option'); op.value = val; op.textContent = val; inp.append(op); } } else { inp = document.createElement('input'); inp.type = kind; if (kind === 'number') inp.step = UNITS.us ? 'any' : '0.5'; } inp.value = kind === 'number' ? yfFmt(UNITS.n(val, 'm'), 0.1, 'm') : val; inp.className = 'ds-yf-cell'; inp.addEventListener('input', () => { yfTouched = true; z[key] = kind === 'number' ? UNITS.inv(Number(inp.value), 'm') : inp.value; z.typical = false; refresh(); }); td.append(inp); };
       mk(z.name, 'text', 'name'); mk(z.from, 'number', 'from'); mk(z.to, 'number', 'to'); mk(z.cooling, 'select', 'cooling'); mk(z.lining, 'select', 'lining');
       const td = tr.insertCell(); const b = document.createElement('button'); b.type = 'button'; b.className = 'ds-btn'; b.textContent = 'remove'; b.addEventListener('click', () => { yfZones.splice(i, 1); buildZones(); refresh(); }); td.append(b);
     });
@@ -2703,7 +2856,7 @@ function drawYourfurnaceInto(root, ctx) {
     const tools = document.createElement('div'); tools.className = 'ds-yf-zonetools'; const add = document.createElement('button'); add.type = 'button'; add.className = 'ds-btn'; add.textContent = 'Add a zone'; add.addEventListener('click', () => { const last = yfZones[yfZones.length - 1]; yfZones.push({ name: 'Zone ' + (yfZones.length + 1), from: last ? last.to : 0, to: (last ? last.to : 0) + 3, cooling: 'Cast iron staves', lining: 'Refractory brick' }); buildZones(); refresh(); }); tools.append(add); box.append(tools);
     const note = document.createElement('small'); note.textContent = 'The sample furnace’s zones are the model’s zone table (01_Inputs rows 64–69); its upper shaft is a typical arrangement. A year installed per zone and the water flow per zone are the next fields when a plant has them.'; box.append(note);
   }
-  function fillForm() { schema.forEach((sec) => sec.fields.forEach((f) => { const inp = el('yf-' + f.key); if (!inp) return; const v = yfValue(f.key, yfState, sample); inp.value = f.type === 'text' || f.type === 'select' ? String(v) : yfFmt(v, f.step); })); buildZones(); showWhen(); }
+  function fillForm() { schema.forEach((sec) => sec.fields.forEach((f) => { const inp = el('yf-' + f.key); if (!inp) return; const v = yfValue(f.key, yfState, sample); if (inp.type === 'number' && f.step) inp.step = UNITS.us && UNITS.key(f.unit) ? 'any' : String(f.step); inp.value = f.type === 'text' || f.type === 'select' ? String(v) : yfFmt(yfShow(f, v), f.step, f.unit); })); buildZones(); showWhen(); }
   function renderOutputs() {
     const r = yfLast, s = yfState, g = (k) => Number(s[k]) || 0;
     const f1 = (v, d = 1) => Number(v).toFixed(d), pct = (v) => (v > 0 ? '+' : '') + Number(v).toFixed(1) + ' %';
@@ -2755,9 +2908,9 @@ function drawYourfurnaceInto(root, ctx) {
     const cost = el('yf-cost'); cost.replaceChildren();
     const dl2 = document.createElement('dl'); dl2.className = 'ds-kv';
     const ref = ctx.ref;
-    [['Works-basis cost at the current prices', ctx.usd(pr.works) + '/tHM'], ['  of which capital counted', ctx.usd(pr.capex)], ['  coke', ctx.usd(pr.coke)], ['  PCI coal', ctx.usd(pr.pci)], ['  natural gas', ctx.usd(pr.gas)], ['  oxygen', ctx.usd(pr.o2)], ['  blower power', ctx.usd(pr.power)], ['  export gas credit', '−' + ctx.usd(pr.exp)],
-      ['Carbon policy', ctx.usd(pr.vent.policy)], ['Cost with policy', ctx.usd(point.cost) + '/tHM'], ['CO₂ emitted', ctx.tco2(point.emitted) + ' t/tHM'],
-      ...(ref ? [['Against the sample all-coke furnace', (point.cost - ref.cost > 0 ? '+' : '−') + '$' + Math.abs(point.cost - ref.cost).toFixed(2) + ' · ' + (point.emitted - ref.emitted > 0 ? '+' : '−') + Math.abs(point.emitted - ref.emitted).toFixed(3) + ' t']] : [])]
+    [['Works-basis cost at the current prices', ctx.usd(pr.works) + '/tHM'], ['  of which capital counted', ctx.usd(pr.capex) + '/tHM'], ['  coke', ctx.usd(pr.coke) + '/tHM'], ['  PCI coal', ctx.usd(pr.pci) + '/tHM'], ['  natural gas', ctx.usd(pr.gas) + '/tHM'], ['  oxygen', ctx.usd(pr.o2) + '/tHM'], ['  blower power', ctx.usd(pr.power) + '/tHM'], ['  export gas credit', '−' + ctx.usd(pr.exp) + '/tHM'],
+      ['Carbon policy', ctx.usd(pr.vent.policy) + '/tHM'], ['Cost with policy', ctx.usd(point.cost) + '/tHM'], ['CO₂ emitted', ctx.tco2(point.emitted) + ' t/tHM'],
+      ...(ref ? [['Against the sample all-coke furnace', (point.cost - ref.cost > 0 ? '+' : '−') + '$' + Math.abs(point.cost - ref.cost).toFixed(2) + '/tHM · ' + (point.emitted - ref.emitted > 0 ? '+' : '−') + Math.abs(point.emitted - ref.emitted).toFixed(3) + ' t CO₂/tHM']] : [])]
       .forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl2.append(dt, dd); });
     cost.append(dl2);
     yfDrawScatter(el('yf-chart'), ctx, point);
@@ -2824,6 +2977,7 @@ function drawYourfurnaceInto(root, ctx) {
     el('yf-save').addEventListener('click', dbSave);
     el('yf-load').addEventListener('click', dbLoad);
     yfBuilt = true;
+    window.addEventListener('ds-units', () => { fillForm(); refresh(); });   // UN-1: the inputs re-shown in the chosen units (the state stays metric)
   }
   refresh();
 }
@@ -3042,6 +3196,7 @@ window.dsPrice = function (c, p, k, inc) {
         add('', usd(o.cost) + ' per tHM · ' + tco2(o.emitted) + ' t CO₂/tHM');
         add('k', 'Limit: ' + o.c.limit);
         if (o.c.epoch !== CUR_EPOCH && !o.you) add('k', 'Previous model epoch; re-walk pending');
+        if (window.UNITS) UNITS.sweep(tip);
         tip.hidden = false;
         const b = box.getBoundingClientRect(), t = tip.getBoundingClientRect();
         let x = ev.clientX - b.left + 12, y = ev.clientY - b.top + 12;
@@ -3101,7 +3256,7 @@ window.dsPrice = function (c, p, k, inc) {
     const g = svg.append('g');
     g.append('g').selectAll('line').data(y.ticks(5)).join('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y).attr('y2', y).style('stroke', 'var(--cds-chart-grid)');
     const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.max(3, Math.floor((W - m.l) / 80))).tickSizeOuter(0));
-    const ay = svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat((t) => '$' + t).tickSizeOuter(0));
+    const ay = svg.append('g').attr('transform', `translate(${m.l},0)`).call(UNITS.axis(d3.axisLeft(y).ticks(5).tickFormat((t) => '$' + t), '$/tHM', 5, UNITS.money).tickSizeOuter(0));
     [ax, ay].forEach((a) => { a.attr('font-size', null).attr('font-family', null); a.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 12); a.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)'); });
     svg.append('text').attr('x', W - m.r).attr('y', H - 6).attr('text-anchor', 'end').attr('font-size', 12).style('fill', 'var(--color-fg-muted)').text('CO₂ emitted, t/tHM');
     svg.append('text').attr('x', m.l + 4).attr('y', m.t + 10).attr('font-size', 12).style('fill', 'var(--color-fg-muted)').text('$ per tHM');
@@ -3258,12 +3413,12 @@ window.dsPrice = function (c, p, k, inc) {
 
   function stepsTable(rows, ref) {
     const t = document.createElement('table');
-    const head = ['Step', 'On the staircase', 'Cost $/tHM', 'CO₂ t/tHM', 'Cost vs the step before', 'CO₂ vs the step before', 'Cost vs all-coke', 'CO₂ vs all-coke', 'Cost of CO₂ avoided', 'Cheapest case in the step', 'Lowest-carbon case in the step'];
+    const head = ['Step', 'On the staircase', 'Cost $/tHM', 'CO₂ t/tHM', 'Cost vs the step before, $/tHM', 'CO₂ vs the step before, t/tHM', 'Cost vs all-coke, $/tHM', 'CO₂ vs all-coke, t/tHM', 'Cost of CO₂ avoided, $/t CO₂', 'Cheapest case in the step', 'Lowest-carbon case in the step'];
     const NUM = (i) => i >= 2 && i <= 8;
     const thead = t.createTHead().insertRow(); head.forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (NUM(i)) th.className = 'n'; thead.append(th); });
     const tb = t.createTBody();
     const id = (o) => codeOf(o.c) + (o.stored ? ccs() : '');
-    const brief = (o) => id(o) + ': ' + usd(o.cost) + ' at ' + tco2(o.emitted) + ' t';
+    const brief = (o) => id(o) + ': ' + usd(o.cost) + '/tHM at ' + tco2(o.emitted) + ' t CO₂/tHM';
     rows.forEach((r) => {
       const tr = tb.insertRow();
       const o = r.pick || r.cut;   // the case the row's numbers are for: on the line, or the step's cheapest CO₂ cut off it
@@ -3294,7 +3449,7 @@ window.dsPrice = function (c, p, k, inc) {
 
   function casesTable(cases, opts, ref) {
     const t = document.createElement('table');
-    const head = [['Case', ''], ['Injected', ''], ['Step', 'ds-hide-narrow'], ['O₂ vol%', 'n'], ['Blast °C / steam g/Nm³', 'n'], ['Coke kg/tHM', 'n'], ['CO₂ gross t/tHM', 'n'], ['CO₂ emitted t/tHM', 'n'], ['Cost $/tHM', 'n'], ['vs all-coke', 'n'], ['Limit reached', 'ds-hide-narrow'], ['Model epoch', '']];
+    const head = [['Case', ''], ['Injected', ''], ['Step', 'ds-hide-narrow'], ['O₂ vol%', 'n'], ['Blast °C / steam g/Nm³', 'n'], ['Coke kg/tHM', 'n'], ['CO₂ gross t/tHM', 'n'], ['CO₂ emitted t/tHM', 'n'], ['Cost $/tHM', 'n'], ['vs all-coke, $/tHM', 'n'], ['Limit reached', 'ds-hide-narrow'], ['Model epoch', '']];
     const thead = t.createTHead().insertRow(); head.forEach(([h, c]) => { const th = document.createElement('th'); th.textContent = h; if (c) th.className = c; thead.append(th); });
     const tb = t.createTBody();
     cases.slice().sort((a, b) => a.order - b.order).forEach((c) => {
@@ -3327,7 +3482,7 @@ window.dsPrice = function (c, p, k, inc) {
     const x = d3.scaleLinear([Math.min(0, lo), hi], [m.l, W - m.r]).nice();
     const y = d3.scaleBand(rows.map((r) => r.c.id), [m.t, H - m.b]).padding(0.25);
     svg.append('g').selectAll('line').data(x.ticks(6)).join('line').attr('x1', x).attr('x2', x).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-grid)');
-    const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.max(3, Math.floor(W / 90))).tickFormat((t) => (t < 0 ? '−$' : '$') + Math.abs(t)).tickSizeOuter(0));
+    const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(UNITS.axis(d3.axisBottom(x).ticks(Math.max(3, Math.floor(W / 90))).tickFormat((t) => (t < 0 ? '−$' : '$') + Math.abs(t)), '$/tHM', Math.max(3, Math.floor(W / 90)), UNITS.money).tickSizeOuter(0));
     ax.attr('font-size', null).attr('font-family', null); ax.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 12); ax.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
     svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-reference)');
     const colors = { capex: dash.colors[4], coke: 'var(--cds-chart-muted)', burden: dash.colors[7] || dash.colors[4], pci: dash.colors[0], gas: dash.colors[1], o2: dash.colors[2], power: dash.colors[5], stoveEnrich: dash.colors[8] || dash.colors[1], policy: dash.colors[6] };
@@ -3378,7 +3533,7 @@ window.dsPrice = function (c, p, k, inc) {
     const x = d3.scaleLinear([Math.min(0, d3.min(diffs)), Math.max(0, d3.max(diffs))], [m.l, W - m.r]).nice();
     const y = d3.scaleBand(rows.map((o) => o.key), [m.t, H - m.b]).padding(0.3);
     svg.append('g').selectAll('line').data(x.ticks(5)).join('line').attr('x1', x).attr('x2', x).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-grid)');
-    const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.max(3, Math.floor((W - m.l - m.r) / 70))).tickFormat((t) => (t === 0 ? '$0' : sgn(t, 0))).tickSizeOuter(0));
+    const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(UNITS.axis(d3.axisBottom(x).ticks(Math.max(3, Math.floor((W - m.l - m.r) / 70))).tickFormat((t) => (t === 0 ? '$0' : sgn(t, 0))), '$/tHM', Math.max(3, Math.floor((W - m.l - m.r) / 70)), UNITS.moneySgn).tickSizeOuter(0));
     ax.attr('font-size', null).attr('font-family', null); ax.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 12); ax.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
     const tip = tooltip(box);
     rows.forEach((o) => {
@@ -3566,7 +3721,7 @@ window.dsPrice = function (c, p, k, inc) {
     const x = d3.scaleLinear([0, d3.max(rows, total)], [m.l, W - m.r]).nice();
     const y = d3.scaleBand(rows.map((c) => c.id), [m.t, H - m.b]).padding(0.28);
     svg.append('g').selectAll('line').data(x.ticks(6)).join('line').attr('x1', x).attr('x2', x).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-grid)');
-    const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(6).tickFormat((v) => d3.format(',')(v) + (v === x.ticks(6).slice(-1)[0] ? ' kg/tHM' : '')).tickSizeOuter(0));
+    const ax = svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(UNITS.axis(d3.axisBottom(x).ticks(6).tickFormat((v) => d3.format(',')(v) + (v === x.ticks(6).slice(-1)[0] ? ' kg/tHM' : '')), 'kg/tHM', 6, (s, y, last) => s + (last ? ' ' + UNITS.label('kg/tHM') : '')).tickSizeOuter(0));
     ax.attr('font-size', null).attr('font-family', null); ax.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 12); ax.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
     const tip = tooltip(box);
     rows.forEach((c) => {
@@ -3732,7 +3887,7 @@ window.dsPrice = function (c, p, k, inc) {
       svg.append('text').attr('x', px(0)).attr('y', py(z) - 3).attr('text-anchor', 'middle').attr('font-size', 10).style('fill', 'var(--color-fg-muted)').text(label);
     };
     dim(-1.5, G.hearth_R, 'hearth Ø ' + (2 * G.hearth_R) + ' m'); dim(8.5, G.belly_R, 'belly Ø ' + (2 * G.belly_R) + ' m'); dim(29.3, G.throat_R, 'throat Ø ' + (2 * G.throat_R) + ' m');
-    const ax = svg.append('g').attr('transform', `translate(${px(-10.6)},0)`).call(d3.axisLeft(d3.scaleLinear([ZBOT + 0.8, 30], [py(ZBOT + 0.8), py(30)])).tickValues([-5, 0, 5, 10, 15, 20, 25, 30]).tickSizeOuter(0));
+    const ax = svg.append('g').attr('transform', `translate(${px(-10.6)},0)`).call(UNITS.axis(d3.axisLeft(d3.scaleLinear([ZBOT + 0.8, 30], [py(ZBOT + 0.8), py(30)])).tickValues([-5, 0, 5, 10, 15, 20, 25, 30]), 'm', 8).tickSizeOuter(0));
     ax.attr('font-size', null).attr('font-family', null); ax.selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 10); ax.selectAll('path,line').style('stroke', 'var(--cds-chart-axis)');
     svg.append('text').attr('transform', `translate(${px(-10.6) - 30},${py(14)}) rotate(-90)`).attr('text-anchor', 'middle').attr('font-size', 10).style('fill', 'var(--color-fg-muted)').text('m above the tuyere centreline');
     svg.append('text').attr('x', px(0)).attr('y', py(-4.6)).attr('text-anchor', 'middle').attr('font-size', 10).style('fill', 'var(--color-fg-muted)').text('hearth: hot metal and slag (not modeled)');
@@ -4123,8 +4278,8 @@ window.dsPrice = function (c, p, k, inc) {
     const conv = opts.filter((o) => ['1', '2', '3'].includes(o.c.step[0]));
     const b = (t) => { const e = document.createElement('b'); e.textContent = t; return e; };
     take.append('At these prices the cheapest furnace is ', b(codeOf(cheapest.c) + (cheapest.stored ? ' with CO₂ ' + word : '')), ' at ', b(usd(cheapest.cost) + '/tHM'),
-      ' and ' + tco2(cheapest.emitted) + ' t CO₂/tHM. The lowest-carbon is ', b(codeOf(cleanest.c) + (cleanest.stored ? ' with CO₂ ' + word : '')), ' at ', b(tco2(cleanest.emitted) + ' t'),
-      ' for ' + usd(cleanest.cost) + '. Steps 1 to 3 keep emissions between ' + tco2(d3.min(conv, (o) => o.emitted)) + ' and ' + tco2(d3.max(conv, (o) => o.emitted)) + ' t; the large cut needs top-gas recycle.');
+      ' and ' + tco2(cheapest.emitted) + ' t CO₂/tHM. The lowest-carbon is ', b(codeOf(cleanest.c) + (cleanest.stored ? ' with CO₂ ' + word : '')), ' at ', b(tco2(cleanest.emitted) + ' t CO₂/tHM'),
+      ' for ' + usd(cleanest.cost) + '/tHM. Steps 1 to 3 keep emissions between ' + tco2(d3.min(conv, (o) => o.emitted)) + ' and ' + tco2(d3.max(conv, (o) => o.emitted)) + ' t CO₂/tHM; the large cut needs top-gas recycle.');
     {
       const on = steps.filter((s) => s.pick), off = steps.filter((s) => !s.pick), up = on.filter((s) => s.prev && s.pick.cost > s.prev.cost + 1e-9);
       const sn = (s) => s.step.split(' ')[0], ids = (o) => codeOf(o.c) + (o.stored ? ccs() : '');
@@ -4165,6 +4320,7 @@ window.dsPrice = function (c, p, k, inc) {
     const ck = dash.data('atDeck');
     const tb = el('check-table').tBodies[0]; tb.replaceChildren();
     if (ck.status === 'ok') ck.data.forEach((r) => { const tr = tb.insertRow(); tr.dataset.key = r.id; [r.id, r.sheet.toFixed(4), r.recomputed.toFixed(4), r.difference.toExponential(1)].forEach((v, i) => { const td = tr.insertCell(); td.textContent = v; if (i) td.className = 'n'; }); });
+    if (window.UNITS) UNITS.sweep();
     if (pendingScroll) { const t = pendingScroll; pendingScroll = null; t.scrollIntoView(); }
   }
 
@@ -4199,6 +4355,7 @@ window.dsPrice = function (c, p, k, inc) {
   }
   setTabUI();
 
+  window.dsRerender = render;
   dash.onData(render);
 })();
 
