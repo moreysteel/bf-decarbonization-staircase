@@ -2366,17 +2366,17 @@ function drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, t
     { id: 'reduction', n: 2, title: 'Direct and indirect reduction: the operating line, and the burden distribution behind it', draw: drawReduction },
     { id: 'cz', n: 3, title: 'The cohesive zone: where the model puts it, and the shape it gives it', draw: drawCZ }];
   const DEEP = { 16: 'radial', 11: 'reduction', 14: 'cz' };
-  let item = 'g1', open = [], needFilter = 'all';
+  let item = 'zones', open = [], needFilter = 'all';
   try {
     const s = JSON.parse(localStorage.getItem('ds-inside') || 'null');
     if (s) {
       const legacy = { radial: 'g4', reduction: 'g3', cz: 'g4' };          // the pre-IM-R items open under their rules
-      if (legacy[s.item]) { item = legacy[s.item]; open = [s.item]; } else if (typeof s.item === 'string') item = s.item;
+      if (legacy[s.item]) { item = legacy[s.item]; open = [s.item]; } else if (typeof s.item === 'string' && s.v === 2) item = s.item;   // IM-Z: a state saved before the section page opens on it once
       if (Array.isArray(s.open)) open = s.open.filter((x) => ITEMS.some((i) => i.id === x));
       if (s.filter === 'owed' || s.filter === 'plant') needFilter = s.filter;
     }
   } catch (e) {}
-  const save = () => { try { localStorage.setItem('ds-inside', JSON.stringify({ item, open, filter: needFilter })); } catch (e) {} };
+  const save = () => { try { localStorage.setItem('ds-inside', JSON.stringify({ v: 2, item, open, filter: needFilter })); } catch (e) {} };
   const redraw = () => drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, tableBox, allRows, fzRows);
 
   box.replaceChildren(); side.replaceChildren(); legend.replaceChildren(); tableBox.replaceChildren();
@@ -3433,21 +3433,123 @@ function drawInsideInto(box, side, legend, c, dash, d3, tooltip, levers, k, p, t
     statusLegend();
   }
 
+
+  // ---------- IM-Z (2026-11-12; Joe: "update the tab on how we handle the various sections of the furnace technically in the model ... put in
+  // there what is outstanding ... a voice that an outsider to building the model can understand"): the furnace section by section, top to
+  // bottom, in plain language: what happens there, how the model handles it, what is still open. The last block lists the Python tools.
+  const ZONES = [
+    { t: 'The whole furnace: one balance of mass and heat', rules: [1, 33],
+      what: 'Before any section is looked at, the furnace as a whole has to balance: every kilogram of iron, carbon, oxygen, hydrogen and nitrogen that goes in comes out, and so does every unit of heat.',
+      how: 'The core of the model is 25 equations solved together, after the method in Cameron, Sukhram, Lefebvre and Davenport (2020). The furnace is cut in two at the thermal reserve zone, and each half must close on mass and on heat. The user states what a plant would state: hot metal temperature, the burden, what is injected and how much, blast temperature and moisture. The model returns what a plant would measure: coke rate, oxygen, wind, top gas analysis and top gas temperature. Coke rate is a result, never an input. Every injectant (coal, natural gas, reformed gas, recycled top gas, gas to the shaft) enters the same balance. The element balances close to rounding at every case. Everything else on this page is a smaller model that sits around this balance and asks one question: could a furnace run at this answer?',
+      open: 'There is no plant data in the model yet. Three settings a plant would normally calibrate are on literature values: the reserve zone temperature (930 °C), the size of the heat losses and their split between the stack and the lower furnace, and the shaft efficiency. The loss split matters most for the top gas temperature. Published values are used and nothing is tuned to make a check pass. The first plant data set chooses between explanations that today fit equally well.' },
+    { t: 'Throat and charging: how ore and coke are laid across the radius', rules: [16, 14, 15],
+      what: 'The charging pattern decides where the gas goes. More coke in the center opens a central chimney; more ore at the wall protects the wall and can starve it of gas.',
+      how: 'The radius is cut into eight rings. The user sets the ore-to-coke ratio at the center, across the middle and at the wall. For each ring the model works out how much gas passes from the pressure drop through that ring’s bed (the Ergun equation), then reports a chimney index for the center, a wall-working index and a fluidization index per ring. These are judged against the base case rather than against an absolute number, because their level depends on particle sizes we have not measured. Burden quality enters here too: pellet and sinter size, strength and reducibility, and coke strength, each change how open the bed is.',
+      open: 'The charged profile is checked but does not yet steer the heat balance in the stack: a center-working furnace and a wall-working furnace get the same total heat exchange. That link is designed and not built. The bed void fraction is a typed value. The slopes that turn burden test results into permeability are placeholders. From a plant we need the profile actually charged and one stack pressure drop at a known operating point.' },
+    { t: 'The stack: heating the burden and reducing it with gas', rules: [10, 11, 12, 23, 24],
+      what: 'Gas rises and gives its heat and its reducing power to the descending burden. The burden is dried, heated and reduced as far as the gas can take it. What the gas cannot do here, carbon must do lower down, at a high cost in heat.',
+      how: 'Two models work together. The first is a heat-exchange map: the stack is cut into 12 levels and 8 rings, 96 cells, with gas going up and solids coming down, which gives a temperature at every point. The second sets how much reduction the gas achieves: the operating-line method of Rist as extended by Bailera, with one shaft efficiency that says how close the gas comes to chemical equilibrium at the reserve zone. That efficiency is taken from published furnaces and then moved by burden quality. The top gas must stay above 110 °C so the burden dries, and below 250 °C for the charging equipment. The model carries two top gas temperatures, one from the whole-furnace balance and one from the heat-exchange map, and holds both above 110 °C.',
+      open: 'Being fixed today: the heat-exchange map used one heat capacity curve for the gas, close to air, at every case. Hydrogen-rich gas carries heat differently. With the gas priced on its real composition, the natural gas maximum moved by about 5 kg/tHM in a trial, so every case is being walked again on the new basis. Until that lands, the gas-injection maxima on the page are lower bounds. One thermal data correction lands first (carbon monoxide above 1,300 K read 2 % low). Also open: the bed indices use the top pressure rather than the local pressure down the stack; the two top gas temperatures can differ by tens of degrees and a plant reading would tell us which one to trust; and hydrogen and carbon monoxide share one efficiency, because no published number lets us separate them.' },
+    { t: 'The cohesive zone: where the burden softens and melts', rules: [14, 6],
+      what: 'Ore softens, sticks together and melts. The soft layers are nearly closed to gas, so gas passes through the coke layers between them. The height and shape of this zone set the pressure drop and how much stack is left above it.',
+      how: 'The model does not draw the zone by hand. It reads it off the temperature map: softening starts where the solids reach about 1,150 °C and melting is complete at about 1,450 °C, ring by ring, which gives the familiar inverted V or W. The heat needed to melt is charged where each ring’s burden crosses that window. A burden that spends longer in the stack arrives more reduced, so the time the burden takes to descend is also counted. The model reports where the root of the zone meets the wall, which matters for wall protection and for any shaft tuyeres.',
+      open: 'The two temperatures are placeholders. They should come from softening and melting tests on the actual pellets and sinter. The zone’s own resistance to gas is folded into the lower-furnace indices rather than modeled layer by layer. At the oxygen-furnace cases the solids at some rings read above 1,450 °C before they leave the map; this is flagged on the page, not hidden.' },
+    { t: 'The lower furnace: bosh, dripping zone and deadman', rules: [13, 15, 17, 18],
+      what: 'Below the cohesive zone coke is the only solid. Iron and slag drip down through it while all the gas comes up through it. If the gas lifts the coke or holds up the liquids, the furnace hangs, slips or floods.',
+      how: 'Four indices are computed, each as a fraction of its physical limit: gas lifting the bed (fluidization), gas holding up the liquids (flooding), liquid held in the bed (drainage) and pressure drop. On Joe’s rule that nobody runs at the limit, every case must stay at or under 0.90. Fines close up the bed, so the model counts where they come from: coke weakened by reaction with CO₂, steam and alkalis, coal char that did not burn, and ash. The coke must also remain at least a third of the charge volume. A second heat balance is kept for this region alone: is there enough heat below the cohesive zone to bring the iron and slag to temperature and keep the deadman hot?',
+      open: 'The level of the fluidization index is set by one operating point known to run in practice (200 kg/tHM of coal); how that anchor is chosen is a question still open. The lower-furnace heat balance has corrections owed, and it shows a shortfall at the full top-gas-recycle case that has not yet been explained away. The one-third coke floor is a placeholder: the model cannot derive where a furnace loses burden support or drainage, so that number has to come from practice.' },
+    { t: 'The raceway and the tuyeres', rules: [2, 3, 4, 5, 7, 8, 9, 22],
+      what: 'Hot blast and the injectants meet coke in front of each tuyere. The flame must be hot enough to burn what is injected and melt what arrives, and not so hot that the burden above sticks. The jet must keep the raceway swept without breaking the coke.',
+      how: 'Flame temperature is a heat balance on the streams that actually arrive, held between a floor that depends on the injectant (2,050 °C for coal, 1,900 °C for natural gas, 2,000 °C for mixtures and reformed gas) and a ceiling of 2,200 °C. The coke’s arrival temperature is computed from the stack above it rather than assumed; with hydrogen-rich injection the lower stack runs cooler, the coke arrives colder, and the flame loses tens of degrees. For coal, the model checks how much oxygen is left for the char after the volatiles have burned, and follows the unburnt char to where it is consumed or leaves as dust. The jet’s velocity, energy and raceway depth are computed, and the tuyere bore and the number of tuyeres in service are picked to keep the jet energy per tuyere inside a 130 to 160 kW window.',
+      open: 'The jet energy floor and ceiling are placeholders for plant numbers. The coal burnout model has one constant set to two points from practice. Three hardware choices are waiting on Joe: the tuyeres at the 200 kg coal case, the bore at the coal-with-recycle case, and 7-inch bores at the reformed-gas cases. The share of raceway radiation that goes to the wall is a typed value.' },
+    { t: 'Hearth, hot metal and slag', rules: [18, 19],
+      what: 'Iron and slag collect, separate and are cast. Slag chemistry must keep the slag fluid and take up sulfur; hot metal temperature and silicon are what the steel shop sees.',
+      how: 'Hot metal temperature and carbon are set by the user. Silicon follows slag basicity through a published partition relation. Slag basicity is held on target automatically: limestone is added when it is low and quartzite when it is high, which matters as soon as low-ash injectants replace coal and coke. Slag liquidus and viscosity are reported from standard correlations. Alkali and zinc loads are reported against practice limits.',
+      open: 'There is no hearth model: no casting, no drainage and no floating deadman. Hot metal temperature is an input, so the model cannot say that the hearth has gone cold; the lower-furnace heat balance above is the only warning. Dust is a typed amount rather than a result. The basicity target and the alkali and zinc limits are placeholders for the plant’s own.' },
+    { t: 'Shaft injection and top gas recycle', rules: [20, 21, 25, 26, 27, 28, 29, 30, 31, 32],
+      what: 'At the far end of the staircase the top gas is cleaned, stripped of CO₂, reheated and returned, part through the tuyeres and part through a second row of tuyeres in the lower shaft. The blast becomes nearly pure oxygen.',
+      how: 'The returned gas enters the same whole-furnace balance, so recycled carbon is never counted as new carbon. Nitrogen has only one exit, the purge, so its build-up is followed exactly; that is why deep recycle forces an oxygen blast. The shaft gas is injected at the reserve zone, because the model, like the ULCOS trials, finds that gas injected higher displaces no coke. The split between tuyeres and shaft is the least shaft share that keeps the stack warm. A model run without being told the answer landed within a point of the ULCOS trial’s carbon saving.',
+      open: 'At the placeholder nozzle size the shaft jet runs up the wall instead of penetrating the burden, and no nozzle size was found that fixes it. This needs plant experience or a flow simulation. Gas cleaning is assumed, not modeled. The recycle heater is built for the tuyere leg only.' },
+    { t: 'Outside the furnace: reformer, stoves, oxygen and cost', rules: [9, 31],
+      what: 'Several cases depend on equipment beside the furnace: a reformer that turns natural gas into hot reducing gas, the stoves, the oxygen supply and CO₂ capture.',
+      how: 'The reformer is a small chemical-equilibrium model that uses the same thermal data as the furnace, so the two cannot disagree; its gas composition is computed, never typed, and it reports its distance from soot formation. The stoves are costed on the blast heat they deliver and what they burn. Cost is the works cost per tonne of hot metal: fuels, oxygen, power, annualized capital, less the value of exported gas. A CO₂ credit is shown as a separate policy line. Every price is a user setting, on a United States basis by default.',
+      open: 'The thermal data are being checked against an independent library; one correction is landing now and one question (methane, on an older evaluation) is with Joe. Coal and oxygen prices are the least certain numbers in the deck. The price sensitivity screen is written and waits for Joe’s ranges.' },
+  ];
+  const WORK_NOW = [
+    'Landing now: the carbon monoxide heat capacity correction above 1,300 K (2 % low in our table; found by the independent check).',
+    'Next, today: the stack’s gas heat capacity on the real gas composition, then every case walked again to its limits. Expect the gas-injection maxima to rise a few kg/tHM and the coal cases to move by about a kilogram of coke.',
+    'Then: the corrections to the lower-furnace heat balance, read on the new states.',
+    'Waiting on Joe: the ranges for the sensitivity screen; which three plant measurements the “Your furnace” runner should fit and which cases it should walk; four smaller rulings on tuyere hardware, the bed-index anchor, methane data and sinter numbers.',
+    'Designed, not built: the charging profile steering the stack heat exchange; the pressure profile down the stack; a dust balance in place of the typed dust rate.',
+    'Not in the model at all: a hearth and casting model; scaffolds and slips; gas cleaning; anything that changes with time. The model is a steady-state picture of each operating point.',
+  ];
+  const PYTOOLS = [
+    ['The Python twin (our own code)', 'A compiled copy of the Excel model. It reads the workbook’s 55,000 formulas, keeps the 12,500 that the results depend on, and solves a case in seconds where Excel takes minutes. Excel remains the model of record; the saved workbook is never written to. Every change since the last saved workbook is a small, named overlay with the old formula kept.'],
+    ['openpyxl and lxml', 'Read the Excel workbook: its formulas, its saved values and the order Excel calculates in.'],
+    ['formulas (with schedula)', 'Translates Excel formulas into Python. Our own faster evaluator handles nearly all cells and is held to the library’s answers within one part in a trillion.'],
+    ['NumPy', 'The arithmetic, and the accelerated iteration that closes the model’s circular loops.'],
+    ['NetworkX', 'Finds the circular loops in the formula graph and traces which cells any given cell can reach.'],
+    ['SciPy', 'Fitting and root-finding for the “Your furnace” runner, which fits the model to a plant’s own measurements.'],
+    ['Cantera', 'An independent thermochemistry library, used only as a check on our heat capacity and equilibrium data and on the reformer. No Cantera number enters the model. It is what found the carbon monoxide error.'],
+    ['pytest', 'The regression suite: about 210 automatic tests run before every change and every publication (fingerprints of the cases, conservation, every switch, the thermal data, the datasets and the web page).'],
+    ['jsonschema and pint', 'Check the structure of the data files and the units of the “Your furnace” export.'],
+    ['Playwright with Chromium', 'Opens the finished page in a real browser and checks every tab in light, dark and phone width before it is published.'],
+    ['SALib and joblib (planned)', 'For the sensitivity screen: which inputs move the answer most. Not yet run.'],
+  ];
+  function renderZones() {
+    section('The furnace section by section', [
+      'This page walks down the furnace from the throat to the hearth. For each section it says what happens there, how the model handles it, and what is still open. It is written for an engineer who knows the blast furnace and has not seen the model.',
+      'One idea runs through all of it. The model is built in two layers. The first is a balance of mass and heat for the whole furnace, which is conservation and holds for any furnace, including ones nobody has run. The second is a set of smaller models, one per section, that judge whether the balanced answer could actually be operated. Each of those reports a margin to a limit, never a bare pass or fail.']);
+    ZONES.forEach((z, i) => {
+      const sec = section((i === 0 ? '' : i + '. ') + z.t, [[b('What happens here. '), z.what], [b('How the model handles it. '), z.how], [b('Still open. '), z.open]]);
+      sec.classList.add('ds-im-zone');
+      const pr = document.createElement('p'); pr.className = 'ds-note'; pr.append('The rules behind this section: ');
+      z.rules.filter((n) => RULES.rule[n]).forEach((n, k2) => { if (k2) pr.append(' · '); pr.append(linkRule(n, n + ' ' + String(RULES.rule[n].title).replace(/\.$/, ''))); });
+      sec.append(pr);
+    });
+    const w = section('What is being worked on, in order', []);
+    const ul = document.createElement('ul'); ul.className = 'ds-rule-needs'; WORK_NOW.forEach((t) => { const li = document.createElement('li'); li.textContent = t; ul.append(li); }); w.append(ul);
+    const cl = document.createElement('p'); cl.append('The full list, rule by rule, is under ');
+    const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ds-linkbtn'; bt.textContent = 'What the model needs'; bt.addEventListener('click', () => { item = 'needs'; save(); redraw(); }); cl.append(bt, '.'); w.append(cl);
+    const py = section('The Python tools we use, and what each is for', ['The model was built in Excel and Excel is still the reference. Python is used to run it faster, to test it and to check it against independent data. Nothing here needs an account or a sign-in to run.']);
+    const wrap = document.createElement('div'); wrap.className = 'ds-tablewrap'; py.append(wrap);
+    const t = document.createElement('table'); t.className = 'ds-rule-table';
+    const hr = t.createTHead().insertRow(); ['Tool', 'What we use it for'].forEach((hh) => { const th = document.createElement('th'); th.textContent = hh; hr.append(th); });
+    const tb = t.createTBody(); PYTOOLS.forEach(([a, d]) => { const tr = tb.insertRow(); tr.insertCell().textContent = a; tr.insertCell().textContent = d; });
+    wrap.append(t);
+    // side: the picked case at a glance, one line per section
+    const id = c.id;
+    kv('This case at a glance (' + code(c) + ')', [
+      ['Coke rate', F('cases', id, 'coke', 1, ' kg/tHM') || NA, 'a result of the whole-furnace balance'],
+      ['Blast oxygen', F('cases', id, 'o2pct', 1, ' vol%') || NA, ''],
+      ['Top gas, whole-furnace balance', F('cases', id, 'ttopSolver', 0, ' °C') || NA, 'held at or above 110 °C'],
+      ['Top gas, heat-exchange map', F('cases', id, 'ttopMap', 0, ' °C') || NA, 'held at or above 110 °C'],
+      ['Shaft efficiency applied', F('inside', id, 'reduction.solver.rApplied', 3) || NA, 'how close the gas comes to equilibrium'],
+      ['Fluidization index', F('cases', id, 'fluidization', 2) || NA, 'limit 1.0; operated at or under 0.90'],
+      ['Flame temperature', F('cases', id, 'flame', 0, ' °C') || NA, 'floor by injectant; ceiling 2,200 °C'],
+      ['Coke arriving at the raceway', F('raceway', id, 'temps.coke_inlet', 0, ' °C') || NA, 'computed from the stack above'],
+      ['Slag', F('products', id, 'slag_rate', 0, ' kg/tHM') || NA, ''],
+      ['Limestone to hold basicity', F('products', id, 'limestone', 1, ' kg/tHM') || NA, ''],
+      ['CO₂, gross', F('cases', id, 'co2gross', 3, ' t CO₂/tHM') || NA, ''],
+    ]);
+    const pn = document.createElement('p'); pn.className = 'ds-note'; pn.textContent = 'Pick another case in the bar above to see the same lines for it. These are the published numbers; the gas-injection cases will move when today’s re-walk lands.'; side.append(pn);
+  }
+
   // ---------- the dispatch ----------
-  const PAGES = RULES.groups.map((g) => ({ id: 'g' + g.n, label: g.n + ' · ' + (GROUP_SHORT[g.n] || g.title), g }))
+  const PAGES = (RULES.groups.length ? [{ id: 'zones', label: 'By furnace section' }] : []).concat(RULES.groups.map((g) => ({ id: 'g' + g.n, label: g.n + ' · ' + (GROUP_SHORT[g.n] || g.title), g })))
     .concat(RULES.groups.length ? [{ id: 'binds', label: 'Binds by step' }, { id: 'needs', label: 'What the model needs' }] : []);
   if (!PAGES.length) {
     section('', ['The rules dataset (rules) has not loaded, so the tab shows the model’s three items as they stood before IM-R.']);
     ITEMS.forEach((it) => deepDive(box, it.id));
     return;
   }
-  if (!PAGES.some((pg) => pg.id === item)) item = 'g1';
+  if (!PAGES.some((pg) => pg.id === item)) item = 'zones';
   const nav = document.createElement('div'); nav.className = 'ds-ctl'; nav.setAttribute('role', 'group'); nav.setAttribute('aria-label', 'Duty');
   const lab = document.createElement('span'); lab.className = 'ds-ctl-label'; lab.textContent = 'Duty'; nav.append(lab);
   PAGES.forEach((pg) => { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ds-btn'; bt.textContent = pg.label; bt.setAttribute('aria-pressed', String(pg.id === item)); bt.addEventListener('click', () => { item = pg.id; save(); redraw(); }); nav.append(bt); });
   box.append(nav);
   const page = PAGES.find((pg) => pg.id === item);
-  if (page.g) renderGroup(page.g); else if (page.id === 'binds') renderBinds(); else renderNeeds();
+  if (page.g) renderGroup(page.g); else if (page.id === 'zones') renderZones(); else if (page.id === 'binds') renderBinds(); else renderNeeds();
 }
 window.drawInsideInto = drawInsideInto;
 
