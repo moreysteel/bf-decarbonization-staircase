@@ -3475,6 +3475,12 @@ const YF = {
   O2_DENS: 1.4291, N2_DENS: 1.2504, AIR_O2: 20.95,
 };
 
+// The coke rate (and the nut coke inside it) is entered DRY, the plant's usual basis. Every balance and price on this tab
+// books the AS-CHARGED tonne, as the model does (02_Calculated_Checks!C458, the CF-1 basis), so the tab converts with the
+// coke moisture entered: as charged = dry / (1 - moisture/100). YR-1 page fix, option (b), Joe 2026-11-12.
+const yfCokeWet = (s) => { const w = Number(s.cokeH2O) || 0; return w > 0 && w < 100 ? 1 / (1 - w / 100) : 1; };
+const yfGetter = (s) => (k) => ((k === 'coke' || k === 'nutCoke') ? (Number(s[k]) || 0) * yfCokeWet(s) : (Number(s[k]) || 0));
+
 // ---- the form: sections and fields (metric; the sample furnace's values are the defaults) ----
 function yfSchema(s) {
   const c = s.c || {}, pr = s.pr || {}, fz = (s.fz && s.fz.geometry) || {}, rw = s.rw || {}, tu = rw.tuyere || {};
@@ -3502,7 +3508,7 @@ function yfSchema(s) {
       { key: 'workingVol', label: 'Working volume (stated)', unit: 'm³', def: n(fz.working_volume, 3000), step: 10, note: 'Compared with the volume of the profile drawn.' },
     ] },
     { id: 'tuyeres', title: 'Tuyeres, top, blast', fields: [
-      { key: 'nTuy', label: 'Tuyeres installed', unit: 'count', def: n(tu.n, 28), step: 1 },
+      { key: 'nTuy', label: 'Tuyeres installed', unit: 'count', def: n(fz.n_tuyeres, 28), step: 1, note: fz.n_tuyeres_active != null ? 'The sample furnace has ' + n(fz.n_tuyeres, 28) + ' installed and runs ' + n(tu.n, 28) + ' active (BKE-1).' : undefined },
       { key: 'nTuyActive', label: 'Tuyeres active', unit: 'count', def: n(tu.n, 28), step: 1 },
       { key: 'tuyD', label: 'Tuyere bore', unit: 'mm', def: n(tu.d_mm, 140), step: 1 },
       { key: 'topP', label: 'Top pressure', unit: 'kPag', def: n(tu.p_top_kPag, 180), step: 5 },
@@ -3514,7 +3520,7 @@ function yfSchema(s) {
       { key: 'o2source', label: 'Oxygen source', type: 'select', options: ['over the fence', 'own plant', 'none'], def: 'none' },
     ] },
     { id: 'period', title: 'Base period', fields: [
-      { key: 'coke', label: 'Coke rate, dry, incl. nut coke', unit: 'kg/tHM', def: n(c.coke, 452), step: 1, note: c.coke_preCZ1 != null ? 'The case behind these defaults is read with CZ-1 on (the residence-time multiplier on the approach to equilibrium; reducibility placeholder RI 70, band 60–80), the record since RW-3 (2026-11-07); with it off on the same field it read ' + Number(c.coke_preCZ1).toFixed(1) + ' kg/tHM.' : undefined },
+      { key: 'coke', label: 'Coke rate, dry, incl. nut coke', unit: 'kg/tHM', def: n(c.coke, 452) * (1 - n(ck.H2O, 5) / 100), step: 1, note: 'Dry. The tab books the as-charged tonne (dry ÷ (1 − the coke moisture below)), as the model does: the sample’s ' + (n(c.coke, 452) * (1 - n(ck.H2O, 5) / 100)).toFixed(1) + ' kg dry is ' + n(c.coke, 452).toFixed(1) + ' kg as charged at ' + n(ck.H2O, 5) + ' % moisture.' + (c.coke_preCZ1 != null ? ' The case behind these defaults is read with CZ-1 on (the residence-time multiplier on the approach to equilibrium; reducibility placeholder RI 70, band 60–80), the record since RW-3 (2026-11-07); with it off on the same field it read ' + (Number(c.coke_preCZ1) * (1 - n(ck.H2O, 5) / 100)).toFixed(1) + ' kg/tHM dry.' : '') },
       { key: 'pci', label: 'PCI rate', unit: 'kg/tHM', def: n(c.pci, 100), step: 1 },
       { key: 'ng', label: 'Natural gas rate', unit: 'Nm³/tHM', def: n(c.ng, 0) / YF.NG_DENS, step: 1 },
       { key: 'hmT', label: 'Hot metal temperature', unit: '°C', def: n(pr.hm_T, 1500), step: 5 },
@@ -3571,7 +3577,7 @@ function yfSchema(s) {
       { key: 'pciO', def_: n(pc.O, 8.05), label: 'PCI coal O', unit: 'wt%', def: 8.05, step: 0.01 },
       { key: 'pciN', def_: n(pc.N, 1.5), label: 'PCI coal N', unit: 'wt%', def: 1.5, step: 0.01 },
       { key: 'pciAsh', def_: n(pc.ash, 9.42), label: 'PCI coal ash', unit: 'wt%', def: 9.42, step: 0.01 },
-      { key: 'pciVM', label: 'PCI coal volatile matter', unit: 'wt%', def: 35, step: 0.5 },
+      { key: 'pciVM', label: 'PCI coal volatile matter', unit: 'wt%', def: n(pc.q_VM, 35), step: 0.5, note: 'Dry basis. The model’s 01_Inputs!W88.' },
       { key: 'lances', label: 'Lances per tuyere', type: 'select', options: ['1', '2'], def: '1' },
       { key: 'ngC', label: 'Natural gas C', unit: 'wt%', def: n(ngm.C, 73.5), step: 0.1 },
       { key: 'ngH', label: 'Natural gas H', unit: 'wt%', def: n(ngm.H, 24), step: 0.1 },
@@ -3585,7 +3591,7 @@ function yfSchema(s) {
       { key: 'cokeSize', group: 'Coke', label: 'Coke mean size, as charged', unit: 'mm', def: n(ck.q_size, 50), step: 1, note: 'The model’s charged size (01_Inputs!AH83). Typical 45–60.' },
       { key: 'cokeFines', group: 'Coke', label: 'Coke −25 mm after screening', unit: 'wt%', def: 2, step: 0.5, note: 'Placeholder 2 % at the sample furnace.' },
       { key: 'cokeOver', group: 'Coke', label: 'Coke +80 mm', unit: 'wt%', def: 5, step: 0.5, note: 'Placeholder 5 % at the sample furnace.' },
-      { key: 'nutCoke', group: 'Coke', label: 'Nut coke charged with the ore', unit: 'kg/tHM', def: 0, step: 1, note: 'Part of the coke rate above, not added to it.' },
+      { key: 'nutCoke', group: 'Coke', label: 'Nut coke charged with the ore', unit: 'kg/tHM', def: 0, step: 1, note: 'Part of the coke rate above (dry, the same basis), not added to it.' },
       { key: 'nutCokeSize', group: 'Coke', label: 'Nut coke mean size', unit: 'mm', def: 18, step: 1 },
       { key: 'cokeStd', group: 'Coke', label: 'Cold strength reported as', type: 'select', options: ['ASTM stability / hardness', 'Micum M40 / M10', 'IRSID I40 / I10', 'JIS DI 150/15'], def: 'ASTM stability / hardness', note: 'Enter the test your plant runs; the page maps it to the model’s stability and hardness (a placeholder map, shown below).' },
       { key: 'cokeStability', group: 'Coke', label: 'Stability (ASTM D3402, +1 in)', unit: '%', def: n(ck.q_stability, 60), step: 0.5, when: 'cokeStd=ASTM stability / hardness', note: 'Typical 55–65.' },
@@ -3675,7 +3681,7 @@ function yfValue(key, state, sample) { const v = state[key]; if (v == null || v 
 
 // ---- the arithmetic: conservation only, no model physics ----
 function yfCompute(s, zones) {
-  const g = (k) => Number(s[k]) || 0;
+  const g = yfGetter(s);   // coke and nut coke as charged
   const out = { flags: [] };
   const prod = g('prod');
   // production and volumes
@@ -3705,6 +3711,7 @@ function yfCompute(s, zones) {
   out.kePerTuyere = 0.5 * out.kgPerTuyere * out.tuyereVelocity * out.tuyereVelocity / 1000;   // kW
   // fuels
   const ngKg = g('ng') * YF.NG_DENS;
+  out.cokeCharged = g('coke');
   out.fuelRate = g('coke') + g('pci') + ngKg;
   const fluxC = g('limestone') * 0.435 * YF.MW.C / YF.MW.CO2 + g('dolomite') * 0.47 * YF.MW.C / YF.MW.CO2;
   const cIn = g('coke') * g('cokeC') / 100 + g('pci') * g('pciC') / 100 + ngKg * g('ngC') / 100 + fluxC;
@@ -3825,7 +3832,7 @@ function yfStack(g) {
   return o;
 }
 function yfMaterials(s) {
-  const g = (k) => Number(s[k]) || 0;
+  const g = yfGetter(s);   // coke and nut coke as charged
   const m = { flags: [] };
   const map = (YF_COKE_MAP[s.cokeStd] || YF_COKE_MAP['ASTM stability / hardness'])(g);
   m.cokeStability = map.stability; m.cokeHardness = map.hardness; m.cokeMapNote = map.note;
@@ -3871,7 +3878,7 @@ function yfMaterials(s) {
 
 // ---- the pseudo-case the page's pricing takes ----
 function yfPriceCase(s, r) {
-  const g = (k) => Number(s[k]) || 0;
+  const g = yfGetter(s);   // coke and nut coke as charged
   return { id: 'You', name: s.name || 'Your furnace', family: 'Your furnace', step: 'Your furnace', epoch: 'plant', limit: 'your base period as entered',
     coke: g('coke'), pci: g('pci'), ng: g('ng') * YF.NG_DENS, atrCH4: 0, genO2: 0, purchO2: r.purchO2kg, wind: r.windTHM + r.addO2,
     hotBlast: g('hbt') > 600, vpsaT: 0, recycleShare: 0, heaterUSD: null, purgeMJ: null, topGasMJ: r.topGasMJ,
@@ -4029,7 +4036,7 @@ function drawYourfurnaceInto(root, ctx) {
     // readouts
     const kv = el('yf-readouts'); kv.replaceChildren();
     const dl = document.createElement('dl'); dl.className = 'ds-kv';
-    [['Fuel rate (coke + PCI + gas)', f1(r.fuelRate, 0) + ' kg/tHM'], ['η CO = CO₂ / (CO + CO₂)', f1(r.etaCO, 3)], ['η H₂ on all the water in the gas (' + r.h2oBasis + ')', f1(r.etaH2, 3)],
+    [['Fuel rate (coke as charged + PCI + gas)', f1(r.fuelRate, 0) + ' kg/tHM'], ['Coke as charged (dry ÷ (1 − moisture))', f1(r.cokeCharged, 1) + ' kg/tHM'], ['η CO = CO₂ / (CO + CO₂)', f1(r.etaCO, 3)], ['η H₂ on all the water in the gas (' + r.h2oBasis + ')', f1(r.etaH2, 3)],
       ['N₂ in the top gas', f1(r.gas.n2, 1) + ' vol% dry' + (g('gasN2') > 0 ? '' : ' (by difference)')], ['Dry top gas (from the nitrogen tie)', f1(r.vDry, 0) + ' Nm³/tHM'], ['Top gas energy (LHV, dry)', f1(r.topGasMJ, 0) + ' MJ/tHM'],
       ['Wind', f1(r.windTHM, 0) + ' Nm³/tHM' + (r.addO2 > 0 ? ' + ' + f1(r.addO2, 0) + ' Nm³ O₂ (' + f1(r.purchO2kg, 0) + ' kg)' : '')], ['Tuyere velocity at blast conditions', f1(r.tuyereVelocity, 0) + ' m/s'], ['Kinetic energy per tuyere', f1(r.kePerTuyere, 0) + ' kW'],
       ['Hearth productivity', f1(r.hearthProductivity, 1) + ' t/m²/d'], ['Working-volume productivity', f1(r.volumeProductivity, 2) + ' t/m³/d'], ['Profile volume to the stockline', f1(r.profileVol, 0) + ' m³ (stated ' + f1(g('workingVol'), 0) + ')'],
